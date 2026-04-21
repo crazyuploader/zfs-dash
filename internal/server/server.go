@@ -25,15 +25,15 @@ const (
 // templateData is the data passed to the HTML template.
 // All fields are pre-computed so the template stays logic-free.
 type templateData struct {
-	Nodes         []model.NodeData
-	RefreshSecs   int
-	FetchedAt     string // human-readable timestamp of the current fetch
-	TotalPools    int
+	Nodes            []model.NodeData
+	RefreshSecs      int
+	FetchedAt        string // human-readable timestamp of the current fetch
+	TotalPools       int
 	UnreachableNodes int
-	HealthyPools  int
-	DegradedPools int
-	ErroredPools  int
-	TotalNodes    int
+	HealthyPools     int
+	DegradedPools    int
+	ErroredPools     int
+	TotalNodes       int
 }
 
 // Start registers routes and begins listening.
@@ -167,7 +167,7 @@ func serveHealthCheck(c fiber.Ctx, f *fetcher.Fetcher, label, poolName string) e
 			"label":  node.Label,
 			"pool":   poolName,
 		})
-		}
+	}
 
 	status := fiber.StatusOK
 	state := "up"
