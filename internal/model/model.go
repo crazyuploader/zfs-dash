@@ -27,19 +27,17 @@ const (
 
 // Pool holds the key metrics for one ZFS pool.
 type Pool struct {
-	Name        string     `json:"name"`
-	Health      PoolHealth `json:"health"`
-	Size        float64    `json:"size"`
-	Allocated   float64    `json:"allocated"`
-	Free        float64    `json:"free"`
-	ReadBytes   float64    `json:"read_bytes"`
-	WriteBytes  float64    `json:"write_bytes"`
-	ReadOps     float64    `json:"read_ops"`
-	WriteOps    float64    `json:"write_ops"`
-	ReadErrors  float64    `json:"read_errors"`
-	WriteErrors float64    `json:"write_errors"`
-	CkSumErrors float64    `json:"cksum_errors"`
-	UsedPercent float64    `json:"used_percent"`
+	Name               string     `json:"name"`
+	Health             PoolHealth `json:"health"`
+	Size               float64    `json:"size"`
+	Allocated          float64    `json:"allocated"`
+	Free               float64    `json:"free"`
+	Freeing            float64    `json:"freeing"`
+	LeakedBytes        float64    `json:"leaked_bytes"`
+	DedupRatio         float64    `json:"dedup_ratio"`
+	FragmentationRatio float64    `json:"fragmentation_ratio"`
+	ReadOnly           bool       `json:"read_only"`
+	UsedPercent        float64    `json:"used_percent"`
 }
 
 // NodeData holds all pool data fetched from one endpoint.
@@ -97,20 +95,16 @@ func ExtractPools(samples []parser.Sample) []Pool {
 			p.Allocated = s.Value
 		case "zfs_pool_free_bytes":
 			p.Free = s.Value
-		case "zfs_pool_read_bytes_total":
-			p.ReadBytes = s.Value
-		case "zfs_pool_written_bytes_total":
-			p.WriteBytes = s.Value
-		case "zfs_pool_read_total":
-			p.ReadOps = s.Value
-		case "zfs_pool_write_total":
-			p.WriteOps = s.Value
-		case "zfs_pool_read_errors_total":
-			p.ReadErrors = s.Value
-		case "zfs_pool_write_errors_total":
-			p.WriteErrors = s.Value
-		case "zfs_pool_checksum_errors_total":
-			p.CkSumErrors = s.Value
+		case "zfs_pool_freeing_bytes":
+			p.Freeing = s.Value
+		case "zfs_pool_leaked_bytes":
+			p.LeakedBytes = s.Value
+		case "zfs_pool_deduplication_ratio":
+			p.DedupRatio = s.Value
+		case "zfs_pool_fragmentation_ratio":
+			p.FragmentationRatio = s.Value
+		case "zfs_pool_readonly":
+			p.ReadOnly = s.Value != 0
 		}
 	}
 

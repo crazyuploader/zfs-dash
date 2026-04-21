@@ -131,8 +131,9 @@ func funcMap() template.FuncMap {
 		},
 
 		// gt2 is a two-arg greater-than helper (template's gt needs comparable types).
-		"gt0": func(f float64) bool { return f > 0 },
-		"gte": func(a, b float64) bool { return a >= b },
+		"gt0":    func(f float64) bool { return f > 0 },
+		"gte":    func(a, b float64) bool { return a >= b },
+		"mul100": func(f float64) float64 { return f * 100 },
 
 		// join wraps strings.Join for use in templates.
 		"join": strings.Join,

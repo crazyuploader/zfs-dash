@@ -509,31 +509,31 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 
           <hr class="divider" aria-hidden="true">
 
-          <!-- I/O stats -->
+          <!-- Pool stats sourced from zfs_exporter pool metrics -->
           <div class="stats">
             <div class="stat">
-              <span class="stat-lbl">Read</span>
-              <span class="stat-val">{{humanBytes .ReadBytes}}</span>
+              <span class="stat-lbl">Dedup</span>
+              <span class="stat-val">{{printf "%.2fx" .DedupRatio}}</span>
             </div>
             <div class="stat">
-              <span class="stat-lbl">Written</span>
-              <span class="stat-val">{{humanBytes .WriteBytes}}</span>
+              <span class="stat-lbl">Fragmentation</span>
+              <span class="stat-val">{{printf "%.0f%%" (mul100 .FragmentationRatio)}}</span>
             </div>
             <div class="stat">
-              <span class="stat-lbl">Read Ops</span>
-              <span class="stat-val">{{printf "%.0f" .ReadOps}}</span>
+              <span class="stat-lbl">Freeing</span>
+              <span class="stat-val">{{humanBytes .Freeing}}</span>
             </div>
             <div class="stat">
-              <span class="stat-lbl">Write Ops</span>
-              <span class="stat-val">{{printf "%.0f" .WriteOps}}</span>
+              <span class="stat-lbl">Leaked</span>
+              <span class="stat-val">{{humanBytes .LeakedBytes}}</span>
             </div>
           </div>
 
-          <!-- Error chips -->
+          <!-- Pool state chips -->
           <div class="err-row">
-            <span class="chip{{if gt0 .ReadErrors}} hot{{end}}">R-err&nbsp;{{printf "%.0f" .ReadErrors}}</span>
-            <span class="chip{{if gt0 .WriteErrors}} hot{{end}}">W-err&nbsp;{{printf "%.0f" .WriteErrors}}</span>
-            <span class="chip{{if gt0 .CkSumErrors}} hot{{end}}">Cksum&nbsp;{{printf "%.0f" .CkSumErrors}}</span>
+            <span class="chip{{if .ReadOnly}} hot{{end}}">Readonly&nbsp;{{if .ReadOnly}}yes{{else}}no{{end}}</span>
+            <span class="chip{{if gt0 .Freeing}} hot{{end}}">Freeing&nbsp;{{humanBytes .Freeing}}</span>
+            <span class="chip{{if gt0 .LeakedBytes}} hot{{end}}">Leaked&nbsp;{{humanBytes .LeakedBytes}}</span>
           </div>
 
         </article>
