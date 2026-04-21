@@ -1,14 +1,10 @@
 services:
-  netviz:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        - BUILDPLATFORM=linux/amd64
+  zfs-dash:
+    image: ghcr.io/crazyuploader/zfs-dash:main
     ports:
       - "8080:8080"
     environment:
-      - TZ=UTC
+      - TZ=Asia/Kolkata
     restart: unless-stopped
     healthcheck:
       test:

@@ -8,14 +8,14 @@ RUN go mod download
 COPY . .
 
 ARG TARGETOS TARGETARCH BUILDPLATFORM
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-w -s" -o netviz .
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-w -s" -o zfs-dash .
 
 FROM alpine:3.23
 
 RUN apk --no-cache add ca-certificates tzdata
 
-COPY --from=builder /app/netviz /netviz
+COPY --from=builder /app/zfs-dash /zfs-dash
 
 EXPOSE 8080
 
-ENTRYPOINT ["/netviz"]
+ENTRYPOINT ["/zfs-dash"]
