@@ -15,11 +15,11 @@ const dashboardHTML = `<!DOCTYPE html>
   --font-body: 'Geist', 'Inter', system-ui, sans-serif;
   --font-mono: 'Geist Mono', 'JetBrains Mono', monospace;
 
-  --text-xs:   clamp(0.75rem,  0.7rem  + 0.25vw, 0.875rem);
-  --text-sm:   clamp(0.875rem, 0.8rem  + 0.35vw, 1rem);
-  --text-base: clamp(1rem,     0.95rem + 0.25vw, 1.125rem);
-  --text-lg:   clamp(1.125rem, 1rem    + 0.75vw, 1.5rem);
-  --text-xl:   clamp(1.5rem,   1.2rem  + 1.25vw, 2.25rem);
+  --text-xs:   clamp(0.72rem,  0.68rem + 0.2vw, 0.8rem);
+  --text-sm:   clamp(0.82rem,  0.78rem + 0.2vw, 0.9rem);
+  --text-base: clamp(0.9rem,   0.85rem + 0.25vw, 1rem);
+  --text-lg:   clamp(1.05rem,  0.95rem + 0.5vw, 1.35rem);
+  --text-xl:   clamp(1.3rem,   1.1rem  + 1vw,   2rem);
 
   --space-1:0.25rem; --space-2:0.5rem;  --space-3:0.75rem;
   --space-4:1rem;    --space-5:1.25rem; --space-6:1.5rem;
@@ -29,9 +29,12 @@ const dashboardHTML = `<!DOCTYPE html>
   --radius-lg:0.75rem;  --radius-xl:1rem; --radius-full:9999px;
 
   --transition: 180ms cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* touch-safe min tap size */
+  --tap: 44px;
 }
 
-/* ── Dark Theme (default) ───────────────────────────── */
+/* ── Dark Theme ─────────────────────────────────────── */
 :root, [data-theme="dark"] {
   --bg:            #0d0d0f;
   --surface:       #131316;
@@ -52,6 +55,12 @@ const dashboardHTML = `<!DOCTYPE html>
   --error-dim:     rgba(221,105,116,0.13);
   --shadow-sm:     0 1px 3px rgba(0,0,0,0.35);
   --shadow-md:     0 4px 20px rgba(0,0,0,0.45);
+
+  /* unhealthy section specific */
+  --warn-section-bg:     rgba(232,175,52,0.06);
+  --warn-section-border: rgba(232,175,52,0.18);
+  --err-section-bg:      rgba(221,105,116,0.06);
+  --err-section-border:  rgba(221,105,116,0.18);
 }
 
 /* ── Light Theme ────────────────────────────────────── */
@@ -75,6 +84,11 @@ const dashboardHTML = `<!DOCTYPE html>
   --error-dim:     rgba(161,53,68,0.1);
   --shadow-sm:     0 1px 3px rgba(0,0,0,0.06);
   --shadow-md:     0 4px 20px rgba(0,0,0,0.09);
+
+  --warn-section-bg:     rgba(156,106,0,0.05);
+  --warn-section-border: rgba(156,106,0,0.18);
+  --err-section-bg:      rgba(161,53,68,0.05);
+  --err-section-border:  rgba(161,53,68,0.18);
 }
 
 /* ── Base Reset ─────────────────────────────────────── */
@@ -101,51 +115,66 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   border-bottom: 1px solid var(--border);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  padding: var(--space-3) var(--space-6);
-  display: flex; align-items: center; gap: var(--space-4);
+  padding: 0 var(--space-4);
+  height: 52px;
+  display: flex; align-items: center; gap: var(--space-3);
 }
 .logo {
   display: flex; align-items: center; gap: var(--space-2);
   text-decoration: none; color: var(--text); flex-shrink: 0;
+  min-height: var(--tap);
 }
-.logo-svg { color: var(--primary); }
+.logo-svg { color: var(--primary); flex-shrink: 0; }
 .logo-name {
   font-size: var(--text-sm); font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.01em; white-space: nowrap;
 }
 .logo-sub {
   font-size: var(--text-xs); color: var(--text-muted);
   font-weight: 400; margin-left: var(--space-1);
 }
-.topbar-spacer { flex: 1; }
+/* hide subtitle on very small screens */
+@media (max-width: 380px) { .logo-sub { display: none; } }
+
+.topbar-spacer { flex: 1; min-width: 0; }
+
 .topbar-meta {
-  display: flex; align-items: center; gap: var(--space-3);
+  display: flex; align-items: center; gap: var(--space-2);
   font-size: var(--text-xs); color: var(--text-muted);
-  font-family: var(--font-mono);
+  font-family: var(--font-mono); flex-shrink: 0;
 }
 .live-dot {
   width: 6px; height: 6px; border-radius: var(--radius-full);
-  background: var(--success); display: inline-block;
+  background: var(--success); display: inline-block; flex-shrink: 0;
   animation: blink 2.4s ease-in-out infinite;
 }
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.35} }
 
+/* hide refresh interval on phones */
+.topbar-refresh { display: none; }
+@media (min-width: 480px) { .topbar-refresh { display: inline; } }
+.topbar-sep { opacity: 0.4; }
+@media (max-width: 479px) { .topbar-sep { display: none; } }
+
 .icon-btn {
-  width: 32px; height: 32px; border-radius: var(--radius-md);
+  width: var(--tap); height: var(--tap); border-radius: var(--radius-md);
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-muted);
+  color: var(--text-muted); flex-shrink: 0;
   transition: background var(--transition), color var(--transition);
 }
 .icon-btn:hover { background: var(--surface-3); color: var(--text); }
 
 /* ── Main ────────────────────────────────────────────── */
 .main {
-  padding: var(--space-6) var(--space-6) var(--space-12);
+  padding: var(--space-5) var(--space-4) var(--space-12);
   max-width: 1400px; margin-inline: auto; width: 100%;
+}
+@media (min-width: 640px) {
+  .main { padding: var(--space-6) var(--space-6) var(--space-12); }
 }
 
 /* ── Page Header ─────────────────────────────────────── */
-.page-header { margin-bottom: var(--space-6); }
+.page-header { margin-bottom: var(--space-5); }
 .page-title {
   font-size: var(--text-xl); font-weight: 600;
   letter-spacing: -0.025em; line-height: 1.1;
@@ -153,25 +182,37 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 .page-sub {
   font-size: var(--text-xs); color: var(--text-muted);
   margin-top: var(--space-1); font-family: var(--font-mono);
+  overflow-wrap: break-word;
 }
 
 /* ── KPI Row ─────────────────────────────────────────── */
 .kpi-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: var(--space-3); margin-bottom: var(--space-8);
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+  margin-bottom: var(--space-6);
+}
+@media (min-width: 480px) {
+  .kpi-row { grid-template-columns: repeat(3, 1fr); gap: var(--space-3); }
+}
+@media (min-width: 900px) {
+  .kpi-row { grid-template-columns: repeat(6, 1fr); }
 }
 .kpi {
   background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius-lg); padding: var(--space-4) var(--space-5);
-  display: flex; flex-direction: column; gap: 2px;
+  border-radius: var(--radius-lg); padding: var(--space-3) var(--space-3);
+  display: flex; flex-direction: column; gap: 1px;
   transition: border-color var(--transition);
+}
+@media (min-width: 640px) {
+  .kpi { padding: var(--space-4) var(--space-4); }
 }
 .kpi:hover { border-color: var(--border-hi); }
 .kpi-label {
-  font-size: var(--text-xs); color: var(--text-muted);
+  font-size: 0.62rem; color: var(--text-muted);
   text-transform: uppercase; letter-spacing: 0.07em; font-weight: 500;
 }
+@media (min-width: 480px) { .kpi-label { font-size: var(--text-xs); } }
 .kpi-val {
   font-size: var(--text-lg); font-weight: 700;
   letter-spacing: -0.025em; line-height: 1.15;
@@ -182,16 +223,18 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 .kpi-val.bad     { color: var(--error); }
 .kpi-val.neutral { color: var(--text); }
 .kpi-hint {
-  font-size: var(--text-xs); color: var(--text-faint);
+  font-size: 0.62rem; color: var(--text-faint);
   font-family: var(--font-mono);
 }
+@media (min-width: 480px) { .kpi-hint { font-size: var(--text-xs); } }
 
 /* ── Node Section ────────────────────────────────────── */
-.node { margin-bottom: var(--space-10); }
+.node { margin-bottom: var(--space-8); }
 .node-head {
   display: flex; align-items: center; gap: var(--space-3);
   padding-bottom: var(--space-3); margin-bottom: var(--space-4);
   border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
 }
 .node-icon-wrap {
   width: 30px; height: 30px; border-radius: var(--radius-md);
@@ -200,75 +243,263 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 }
 .node-label-row { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 .node-label { font-size: var(--text-base); font-weight: 600; letter-spacing: -0.01em; }
-.node-meta  { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.node-meta  { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
 .node-location {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 3px 9px; border-radius: var(--radius-full);
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 8px; border-radius: var(--radius-full);
   background: color-mix(in oklab, var(--primary) 14%, transparent);
   border: 1px solid color-mix(in oklab, var(--primary) 24%, transparent);
-  color: var(--primary); font-size: 0.68rem; font-weight: 700;
+  color: var(--primary); font-size: 0.62rem; font-weight: 700;
   letter-spacing: 0.04em; text-transform: uppercase;
 }
 .node-location::before {
-  content: "";
-  width: 5px; height: 5px; border-radius: 50%;
+  content: ""; width: 5px; height: 5px; border-radius: 50%;
   background: currentColor; opacity: 0.9;
 }
-.node-url   { font-size: var(--text-xs); color: var(--text-faint); font-family: var(--font-mono); }
-.node-ts    { margin-left: auto; font-size: var(--text-xs); color: var(--text-faint); font-family: var(--font-mono); }
+.node-url { font-size: var(--text-xs); color: var(--text-faint); font-family: var(--font-mono); overflow-wrap: anywhere; }
+.node-ts { font-size: var(--text-xs); color: var(--text-faint); font-family: var(--font-mono); white-space: nowrap; }
 
 /* ── Error Banner ────────────────────────────────────── */
 .node-err {
   background: var(--error-dim); border: 1px solid color-mix(in oklab, var(--error) 30%, transparent);
-  border-radius: var(--radius-lg); padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-lg); padding: var(--space-4) var(--space-4);
   color: var(--error); font-size: var(--text-sm);
-  display: flex; align-items: center; gap: var(--space-3);
+  display: flex; align-items: flex-start; gap: var(--space-3);
 }
+.node-err svg { flex-shrink: 0; margin-top: 1px; }
 
 /* ── Empty State ─────────────────────────────────────── */
 .empty {
-  text-align: center; padding: var(--space-10) var(--space-8);
+  text-align: center; padding: var(--space-10) var(--space-6);
   color: var(--text-muted); display: flex; flex-direction: column;
   align-items: center; gap: var(--space-3);
 }
 .empty svg { color: var(--text-faint); }
 .empty h3  { color: var(--text); font-size: var(--text-base); font-weight: 600; }
-.empty p   { font-size: var(--text-sm); max-width: 38ch; }
+.empty p   { font-size: var(--text-sm); max-width: 36ch; }
 
-/* ── Pool Detail Modal ───────────────────────────────── */
+/* ═══════════════════════════════════════════════════════
+   ── Unhealthy Pools Section ──────────────────────────
+   ═══════════════════════════════════════════════════════ */
+
+/* Shared collapsible wrapper */
+.alert-section {
+  margin-bottom: var(--space-5);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+/* Degraded variant */
+.alert-section.degraded {
+  border-color: var(--warn-section-border);
+  background: var(--warn-section-bg);
+}
+
+/* Faulted/unreachable variant */
+.alert-section.faulted {
+  border-color: var(--err-section-border);
+  background: var(--err-section-bg);
+}
+
+/* Toggle header */
+.alert-toggle {
+  width: 100%;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  padding: var(--space-4) var(--space-4);
+  cursor: pointer;
+  min-height: var(--tap);
+  /* background is set on .alert-section so toggle stays transparent */
+  background: none; border: none;
+}
+@media (min-width: 480px) { .alert-toggle { padding: var(--space-4) var(--space-5); } }
+
+.alert-toggle:focus-visible {
+  outline: 2px solid var(--primary); outline-offset: -2px;
+}
+
+.alert-toggle-left { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+
+/* Pulsing dot */
+.alert-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  animation: blink-dot 1.6s ease-in-out infinite;
+}
+.degraded .alert-dot { background: var(--warning); }
+.faulted  .alert-dot { background: var(--error); }
+@keyframes blink-dot { 0%,100%{opacity:1} 50%{opacity:0.25} }
+
+.alert-toggle-text { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; min-width: 0; }
+.alert-toggle-title {
+  font-size: var(--text-sm); font-weight: 600; white-space: nowrap;
+}
+.degraded .alert-toggle-title { color: var(--warning); }
+.faulted  .alert-toggle-title { color: var(--error); }
+
+.alert-toggle-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 20px;
+  padding: 0 6px; border-radius: var(--radius-full);
+  font-size: 0.65rem; font-weight: 700; letter-spacing: 0.04em; font-family: var(--font-mono);
+}
+.degraded .alert-toggle-badge {
+  background: rgba(232,175,52,0.2); color: var(--warning);
+  border: 1px solid rgba(232,175,52,0.35);
+}
+.faulted .alert-toggle-badge {
+  background: rgba(221,105,116,0.2); color: var(--error);
+  border: 1px solid rgba(221,105,116,0.35);
+}
+
+.alert-toggle-desc {
+  font-size: var(--text-xs); font-family: var(--font-mono); opacity: 0.6;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.degraded .alert-toggle-desc { color: var(--warning); }
+.faulted  .alert-toggle-desc { color: var(--error); }
+
+.alert-arrow {
+  flex-shrink: 0; transition: transform 220ms ease;
+}
+.alert-arrow.open { transform: rotate(180deg); }
+.degraded .alert-arrow { color: var(--warning); }
+.faulted  .alert-arrow { color: var(--error); }
+
+/* Divider between toggle and body */
+.alert-divider {
+  height: 1px; margin: 0;
+  border: none;
+}
+.degraded .alert-divider { background: var(--warn-section-border); }
+.faulted  .alert-divider  { background: var(--err-section-border); }
+.alert-divider.hidden { display: none; }
+
+/* Body */
+.alert-body {
+  padding: var(--space-4);
+  display: grid; gap: var(--space-3);
+  /* subtle inner bg to lift cards slightly */
+}
+.degraded .alert-body { background: rgba(232,175,52,0.03); }
+.faulted  .alert-body  { background: rgba(221,105,116,0.03); }
+@media (min-width: 480px) { .alert-body { padding: var(--space-4) var(--space-5) var(--space-5); } }
+.alert-body.collapsed { display: none; }
+
+/* pool cards inside an alert section get a themed border */
+.alert-body .pool-card {
+  border-color: var(--warn-section-border);
+}
+.faulted .alert-body .pool-card {
+  border-color: var(--err-section-border);
+}
+.alert-body .pool-card:hover {
+  border-color: color-mix(in oklab, var(--warning) 50%, transparent);
+}
+.faulted .alert-body .pool-card:hover {
+  border-color: color-mix(in oklab, var(--error) 50%, transparent);
+}
+
+/* Node failures (unreachable) inside the faulted alert section */
+.alert-node-err {
+  background: color-mix(in oklab, var(--error-dim) 60%, transparent);
+  border: 1px solid color-mix(in oklab, var(--error) 22%, transparent);
+  border-radius: var(--radius-lg); padding: var(--space-4);
+  display: flex; flex-direction: column; gap: var(--space-3);
+}
+.alert-node-err-head {
+  display: flex; align-items: center; gap: var(--space-2);
+}
+.alert-node-err-label { font-size: var(--text-sm); font-weight: 600; color: var(--error); }
+.alert-node-err-loc {
+  font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  padding: 2px 7px; border-radius: var(--radius-full);
+  background: rgba(221,105,116,0.15); color: var(--error);
+  border: 1px solid rgba(221,105,116,0.3);
+}
+.alert-node-err-url {
+  font-size: var(--text-xs); color: var(--text-faint); font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+.alert-node-err-msg {
+  display: flex; align-items: flex-start; gap: var(--space-2);
+  font-size: var(--text-xs); color: var(--error); font-family: var(--font-mono);
+  opacity: 0.85;
+}
+.alert-node-err-msg svg { flex-shrink: 0; margin-top: 1px; }
+
+/* Pool detail Modal ───────────────────────────────────── */
 .pool-card[data-has-datasets="true"] { cursor: pointer; }
 .pool-detail-overlay {
   position: fixed; inset: 0; z-index: 1200;
-  display: none; align-items: center; justify-content: center;
-  padding: var(--space-4); background: rgba(5, 6, 10, 0.68);
+  display: none; align-items: flex-end; justify-content: center;
+  padding: 0;
+  background: rgba(5, 6, 10, 0.72);
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
 }
-.pool-detail-overlay.open { display: flex; }
-.pool-detail-modal {
-  width: min(980px, 100%); max-height: min(88dvh, 900px); overflow: auto;
-  background: color-mix(in oklab, var(--surface) 94%, black 6%);
-  border: 1px solid var(--border-hi); border-radius: calc(var(--radius-xl) + 2px);
-  box-shadow: 0 24px 80px rgba(0,0,0,0.45);
+@media (min-width: 640px) {
+  .pool-detail-overlay {
+    align-items: center;
+    padding: var(--space-4);
+  }
 }
+.pool-detail-overlay.open { display: flex; }
+
+.pool-detail-modal {
+  width: 100%;
+  max-height: 92dvh;
+  overflow: auto;
+  background: color-mix(in oklab, var(--surface) 96%, black 4%);
+  border: 1px solid var(--border-hi);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  box-shadow: 0 -8px 48px rgba(0,0,0,0.4);
+  overscroll-behavior: contain;
+}
+@media (min-width: 640px) {
+  .pool-detail-modal {
+    width: min(980px, 100%);
+    max-height: min(88dvh, 900px);
+    border-radius: calc(var(--radius-xl) + 2px);
+    box-shadow: 0 24px 80px rgba(0,0,0,0.45);
+  }
+}
+
+/* drag handle hint on mobile */
+.pool-detail-modal::before {
+  content: "";
+  display: block;
+  width: 36px; height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--border-hi);
+  margin: var(--space-3) auto var(--space-1);
+}
+@media (min-width: 640px) { .pool-detail-modal::before { display: none; } }
+
 .pool-detail-head {
   position: sticky; top: 0; z-index: 2;
-  display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4);
-  padding: var(--space-5); background: color-mix(in oklab, var(--surface) 90%, transparent);
+  display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3);
+  padding: var(--space-4);
+  background: color-mix(in oklab, var(--surface) 90%, transparent);
   border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(8px);
 }
+@media (min-width: 480px) { .pool-detail-head { padding: var(--space-5); } }
+
 .pool-detail-title { font-size: var(--text-lg); font-weight: 600; letter-spacing: -0.02em; }
-.pool-detail-sub { margin-top: 4px; font-size: var(--text-xs); color: var(--text-muted); font-family: var(--font-mono); }
+.pool-detail-sub { margin-top: 3px; font-size: var(--text-xs); color: var(--text-muted); font-family: var(--font-mono); }
+
 .pool-detail-close {
-  width: 34px; height: 34px; border-radius: var(--radius-md);
+  width: var(--tap); height: var(--tap); border-radius: var(--radius-md);
   display: flex; align-items: center; justify-content: center;
   color: var(--text-muted); border: 1px solid var(--border);
+  flex-shrink: 0;
 }
 .pool-detail-close:hover { color: var(--text); background: var(--surface-3); }
-.pool-detail-body { padding: var(--space-5); }
-.pool-detail-empty {
-  color: var(--text-muted); font-size: var(--text-sm);
-  padding: var(--space-6) 0;
-}
+
+.pool-detail-body { padding: var(--space-4); }
+@media (min-width: 480px) { .pool-detail-body { padding: var(--space-5); } }
+
+.pool-detail-empty { color: var(--text-muted); font-size: var(--text-sm); padding: var(--space-6) 0; }
+
 .dataset-list { display: grid; gap: var(--space-3); }
 .dataset-item {
   background: var(--surface-2); border: 1px solid var(--border);
@@ -279,21 +510,25 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   gap: var(--space-3); margin-bottom: var(--space-3);
 }
 .dataset-name {
-  font-family: var(--font-mono); font-size: var(--text-sm); color: var(--text);
+  font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text);
   word-break: break-all;
 }
+@media (min-width: 480px) { .dataset-name { font-size: var(--text-sm); } }
 .dataset-kind {
   padding: 2px 7px; border-radius: var(--radius-full);
   background: var(--surface-3); color: var(--text-muted);
-  font-size: 0.66rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  font-size: 0.62rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
   flex-shrink: 0;
 }
 .dataset-grid {
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
 }
+@media (min-width: 480px) { .dataset-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); } }
 .dataset-metric { display: flex; flex-direction: column; gap: 2px; }
 .dataset-metric-label {
-  font-size: 0.68rem; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em;
+  font-size: 0.62rem; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em;
 }
 .dataset-metric-value { font-size: var(--text-xs); color: var(--text-muted); font-family: var(--font-mono); }
 .dataset-metric-value.hot { color: var(--warning); }
@@ -301,22 +536,32 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 /* ── Pool Grid ───────────────────────────────────────── */
 .pools-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
-  gap: var(--space-4);
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+}
+@media (min-width: 560px) {
+  .pools-grid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--space-4); }
 }
 
 /* ── Pool Card ───────────────────────────────────────── */
 .pool-card {
   background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius-xl); padding: var(--space-5);
-  display: flex; flex-direction: column; gap: var(--space-4);
+  border-radius: var(--radius-xl); padding: var(--space-4);
+  display: flex; flex-direction: column; gap: var(--space-3);
   transition: box-shadow var(--transition), border-color var(--transition), transform var(--transition);
   will-change: transform;
 }
-.pool-card:hover {
-  border-color: var(--border-hi);
-  box-shadow: var(--shadow-md);
-  transform: translateY(-2px);
+@media (min-width: 480px) { .pool-card { padding: var(--space-5); gap: var(--space-4); } }
+@media (hover: hover) {
+  .pool-card:hover {
+    border-color: var(--border-hi);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+  }
+}
+/* tap feedback on touch devices */
+@media (hover: none) {
+  .pool-card:active { opacity: 0.85; transform: scale(0.99); }
 }
 
 /* Pool card top row */
@@ -337,7 +582,7 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 .hbadge {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 3px 8px; border-radius: var(--radius-full);
-  font-size: 0.68rem; font-weight: 700;
+  font-size: 0.65rem; font-weight: 700;
   letter-spacing: 0.06em; text-transform: uppercase; flex-shrink: 0;
 }
 .hbadge-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
@@ -372,7 +617,7 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 .usage-sizes {
   display: flex; justify-content: space-between;
   font-size: var(--text-xs); font-family: var(--font-mono);
-  color: var(--text-faint);
+  color: var(--text-faint); gap: var(--space-2);
 }
 .usage-sizes b { color: var(--text-muted); font-weight: 500; }
 
@@ -387,7 +632,7 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   padding: var(--space-3); display: flex; flex-direction: column; gap: 2px;
 }
 .stat-lbl {
-  font-size: 0.68rem; color: var(--text-faint);
+  font-size: 0.62rem; color: var(--text-faint);
   text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500;
 }
 .stat-val {
@@ -399,74 +644,18 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 /* ── Error Chips ─────────────────────────────────────── */
 .err-row { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 .chip {
-  font-size: 0.68rem; font-family: var(--font-mono); font-weight: 500;
-  padding: 2px var(--space-2); border-radius: var(--radius-sm);
+  font-size: 0.65rem; font-family: var(--font-mono); font-weight: 500;
+  padding: 3px var(--space-2); border-radius: var(--radius-sm);
   background: var(--surface-3); color: var(--text-faint);
+  white-space: nowrap;
 }
 .chip.hot { background: var(--error-dim); color: var(--error); }
-
-/* ── Node Failures ────────────────────────────────────── */
-.failures-section { margin-bottom: var(--space-6); }
-.failures-toggle {
-  width: 100%; display: flex; align-items: center; justify-content: space-between;
-  gap: var(--space-3); padding: var(--space-4) var(--space-5);
-  background: var(--error-dim); border: 1px solid color-mix(in oklab, var(--error) 30%, transparent);
-  border-radius: var(--radius-xl); cursor: pointer;
-}
-.failures-toggle:hover { border-color: color-mix(in oklab, var(--error) 55%, transparent); }
-.failures-toggle-left { display: flex; align-items: center; gap: var(--space-3); }
-.failures-toggle-dot {
-  width: 8px; height: 8px; border-radius: 50%; background: var(--error); flex-shrink: 0;
-  animation: blink-dot 1.4s ease-in-out infinite;
-}
-@keyframes blink-dot { 0%,100%{opacity:1} 50%{opacity:0.3} }
-.failures-toggle-title { font-size: var(--text-sm); font-weight: 600; color: var(--error); }
-.failures-toggle-count { font-size: var(--text-sm); color: var(--error); font-family: var(--font-mono); }
-.failures-toggle-arrow {
-  color: var(--error); transition: transform 200ms ease; flex-shrink: 0;
-}
-.failures-toggle-arrow.open { transform: rotate(180deg); }
-.failures-body {
-  margin-top: var(--space-2); display: grid; gap: var(--space-2);
-}
-.failures-body.collapsed { display: none; }
-.failure-item {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: var(--space-3); align-items: center;
-  padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg);
-  background: color-mix(in oklab, var(--error-dim) 50%, transparent);
-  border: 1px solid color-mix(in oklab, var(--error) 18%, transparent);
-}
-.failure-label { font-size: var(--text-sm); font-weight: 600; }
-.failure-location { font-size: var(--text-xs); color: var(--text-muted); }
-.failure-chip {
-  padding: 2px 8px; border-radius: var(--radius-full);
-  background: color-mix(in oklab, var(--error) 15%, transparent);
-  border: 1px solid color-mix(in oklab, var(--error) 30%, transparent);
-  color: var(--error); font-size: 0.68rem; font-weight: 700;
-  letter-spacing: 0.04em; text-transform: uppercase;
-}
-.failure-time { font-size: var(--text-xs); color: var(--text-faint); font-family: var(--font-mono); }
 
 /* ── Refresh Progress Bar ────────────────────────────── */
 #rbar {
   position: fixed; bottom: 0; left: 0; height: 2px;
   background: var(--primary); width: 0%; z-index: 999;
   opacity: 0.55; pointer-events: none;
-}
-
-/* ── Responsive ──────────────────────────────────────── */
-@media (max-width: 640px) {
-  .main    { padding: var(--space-4); }
-  .topbar  { padding: var(--space-3) var(--space-4); }
-  .kpi-row { grid-template-columns: 1fr 1fr; }
-  .pools-grid { grid-template-columns: 1fr; }
-  .dataset-grid { grid-template-columns: 1fr; }
-  .topbar-meta span:nth-child(n+3) { display: none; }
-  .node-head { align-items: flex-start; }
-  .node-meta { flex: 1; }
-  .node-ts { margin-left: 0; }
-  .pool-detail-head, .pool-detail-body { padding: var(--space-4); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -482,8 +671,7 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 <!-- ── Top Bar ────────────────────────────────────────── -->
 <header class="topbar">
   <a class="logo" href="/" aria-label="ZFS Dash home">
-    <!-- SVG logo: server rack symbol -->
-    <svg class="logo-svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+    <svg class="logo-svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
          stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"
          aria-hidden="true">
       <rect x="2" y="2"  width="20" height="6" rx="1.5"/>
@@ -501,12 +689,11 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   <div class="topbar-meta" aria-live="polite">
     <span class="live-dot" aria-hidden="true"></span>
     <span id="ts">{{.FetchedAt}}</span>
-    <span aria-hidden="true">·</span>
-    <span>↻&thinsp;{{.RefreshSecs}}s</span>
+    <span class="topbar-sep" aria-hidden="true">·</span>
+    <span class="topbar-refresh">↻&thinsp;{{.RefreshSecs}}s</span>
   </div>
 
   <button class="icon-btn" data-theme-toggle aria-label="Toggle light/dark mode">
-    <!-- moon icon (shown in dark mode) -->
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
          stroke="currentColor" stroke-width="2" aria-hidden="true">
       <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
@@ -557,26 +744,47 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
     </div>
   </div>
 
+  <!-- ══ Unreachable Nodes ══ -->
   {{if gt .UnreachableNodes 0}}
-  <div class="failures-section">
-    <div class="failures-toggle" id="failures-toggle" role="button" aria-expanded="false" aria-controls="failures-body">
-      <div class="failures-toggle-left">
-        <div class="failures-toggle-dot" aria-hidden="true"></div>
-        <div class="failures-toggle-title">Node Failures</div>
-        <div class="failures-toggle-count">{{.UnreachableNodes}}</div>
+  <div class="alert-section faulted" id="section-unreachable">
+    <button class="alert-toggle" id="toggle-unreachable"
+            aria-expanded="false" aria-controls="body-unreachable">
+      <div class="alert-toggle-left">
+        <div class="alert-dot" aria-hidden="true"></div>
+        <div class="alert-toggle-text">
+          <span class="alert-toggle-title">Unreachable Nodes</span>
+          <span class="alert-toggle-badge">{{.UnreachableNodes}}</span>
+          <span class="alert-toggle-desc">cannot be reached</span>
+        </div>
       </div>
-      <svg class="failures-toggle-arrow" id="failures-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-    </div>
-    <div class="failures-body collapsed" id="failures-body">
+      <svg class="alert-arrow" id="arrow-unreachable"
+           width="16" height="16" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="m6 9 6 6 6-6"/>
+      </svg>
+    </button>
+    <hr class="alert-divider hidden" id="divider-unreachable">
+    <div class="alert-body collapsed" id="body-unreachable">
       {{range $node := .Nodes}}
       {{if $node.Error}}
-      <div class="failure-item">
-        <div>
-          <div class="failure-label">{{$node.Label}}</div>
-          {{if $node.Location}}<div class="failure-location">{{$node.Location}}</div>{{end}}
+      <div class="alert-node-err">
+        <div class="alert-node-err-head">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--error)"
+               stroke-width="2" stroke-linecap="round" flex-shrink="0" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <span class="alert-node-err-label">{{$node.Label}}</span>
+          {{if $node.Location}}<span class="alert-node-err-loc">{{$node.Location}}</span>{{end}}
         </div>
-        <div class="failure-chip">unreachable</div>
-        <div class="failure-time">{{fmtNodeTime $node.FetchedAt}}</div>
+        <div class="alert-node-err-url">{{$node.URL}}</div>
+        <div class="alert-node-err-msg">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" aria-hidden="true">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          <span>{{$node.Error}}</span>
+        </div>
       </div>
       {{end}}
       {{end}}
@@ -584,8 +792,82 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   </div>
   {{end}}
 
-  <!-- Per-node sections -->
+  <!-- ══ Degraded Pools ══ -->
+  {{if gt .DegradedPools 0}}
+  <div class="alert-section degraded" id="section-degraded">
+    <button class="alert-toggle" id="toggle-degraded"
+            aria-expanded="false" aria-controls="body-degraded">
+      <div class="alert-toggle-left">
+        <div class="alert-dot" aria-hidden="true"></div>
+        <div class="alert-toggle-text">
+          <span class="alert-toggle-title">Degraded Pools</span>
+          <span class="alert-toggle-badge">{{.DegradedPools}}</span>
+          <span class="alert-toggle-desc">require attention</span>
+        </div>
+      </div>
+      <svg class="alert-arrow" id="arrow-degraded"
+           width="16" height="16" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="m6 9 6 6 6-6"/>
+      </svg>
+    </button>
+    <hr class="alert-divider hidden" id="divider-degraded">
+    <div class="alert-body collapsed" id="body-degraded">
+      <!-- pools grid reused inside the alert body -->
+      <div class="pools-grid">
+        {{range $ni, $node := .Nodes}}
+        {{if not $node.Error}}
+        {{range $pi, $pool := $node.Pools}}
+        {{if eq $pool.Health "DEGRADED"}}
+        {{template "poolCard" dict "pool" $pool "ni" $ni "pi" $pi}}
+        {{end}}
+        {{end}}
+        {{end}}
+        {{end}}
+      </div>
+    </div>
+  </div>
+  {{end}}
+
+  <!-- ══ Faulted / Unavailable Pools ══ -->
+  {{if gt .ErroredPools 0}}
+  <div class="alert-section faulted" id="section-faulted">
+    <button class="alert-toggle" id="toggle-faulted"
+            aria-expanded="false" aria-controls="body-faulted">
+      <div class="alert-toggle-left">
+        <div class="alert-dot" aria-hidden="true"></div>
+        <div class="alert-toggle-text">
+          <span class="alert-toggle-title">Faulted / Unavailable Pools</span>
+          <span class="alert-toggle-badge">{{.ErroredPools}}</span>
+          <span class="alert-toggle-desc">immediate action needed</span>
+        </div>
+      </div>
+      <svg class="alert-arrow" id="arrow-faulted"
+           width="16" height="16" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="m6 9 6 6 6-6"/>
+      </svg>
+    </button>
+    <hr class="alert-divider hidden" id="divider-faulted">
+    <div class="alert-body collapsed" id="body-faulted">
+      <div class="pools-grid">
+        {{range $ni, $node := .Nodes}}
+        {{if not $node.Error}}
+        {{range $pi, $pool := $node.Pools}}
+        {{if ne $pool.Health "ONLINE"}}{{if ne $pool.Health "DEGRADED"}}
+        {{template "poolCard" dict "pool" $pool "ni" $ni "pi" $pi}}
+        {{end}}{{end}}
+        {{end}}
+        {{end}}
+        {{end}}
+      </div>
+    </div>
+  </div>
+  {{end}}
+
+  <!-- ══ Per-node healthy pools ══ -->
   {{range $ni, $node := .Nodes}}
+  {{if not $node.Error}}
   <section class="node" aria-label="Node {{$node.Label}}">
 
     <div class="node-head">
@@ -606,108 +888,31 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
       <div class="node-ts" aria-label="Fetched at">{{fmtNodeTime $node.FetchedAt}}</div>
     </div>
 
-    {{if $node.Error}}
-    <div class="node-err" role="alert">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-           stroke-width="2" aria-hidden="true">
-        <circle cx="12" cy="12" r="10"/>
-        <line x1="12" y1="8" x2="12" y2="12"/>
-        <line x1="12" y1="16" x2="12.01" y2="16"/>
+    {{if not $node.Pools}}
+    <div class="empty">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.4" aria-hidden="true">
+        <rect x="2" y="3" width="20" height="18" rx="2"/>
+        <path d="M8 7h8M8 12h8M8 17h4"/>
       </svg>
-      <span>{{$node.Error}}</span>
+      <h3>No pools found</h3>
+      <p>The exporter returned no ZFS pool metrics for this node.</p>
     </div>
     {{else}}
-      {{if not $node.Pools}}
-      <div class="empty">
-        <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="1.4" aria-hidden="true">
-          <rect x="2" y="3" width="20" height="18" rx="2"/>
-          <path d="M8 7h8M8 12h8M8 17h4"/>
-        </svg>
-        <h3>No pools found</h3>
-        <p>The exporter returned no ZFS pool metrics for this node.</p>
-      </div>
-      {{else}}
-      <div class="pools-grid">
-        {{range $pi, $pool := $node.Pools}}
-        <article class="pool-card" aria-label="Pool {{$pool.Name}}" data-node-index="{{$ni}}" data-pool-index="{{$pi}}" data-has-datasets="{{if $pool.Datasets}}true{{else}}false{{end}}">
-
-          <!-- Name + health -->
-          <div class="pool-top">
-            <div>
-              <div class="pool-name">{{$pool.Name}}</div>
-              <div class="pool-sub">zfs pool</div>
-            </div>
-            <span class="hbadge {{healthClass $pool.Health}}">
-              <span class="hbadge-dot" aria-hidden="true"></span>
-              {{$pool.Health}}
-            </span>
-          </div>
-
-          <!-- Capacity bar (only when size is known) -->
-          {{if gt $pool.Size 0.0}}
-          <div class="usage">
-            <div class="usage-header">
-              <span>Capacity used</span>
-              <span class="usage-pct">{{printf "%.1f" $pool.UsedPercent}}%</span>
-            </div>
-            <div class="bar-track"
-                 role="progressbar"
-                 aria-valuenow="{{printf "%.0f" $pool.UsedPercent}}"
-                 aria-valuemin="0" aria-valuemax="100"
-                 aria-label="{{printf "%.1f" $pool.UsedPercent}}% used">
-              <div class="bar-fill{{if gte $pool.UsedPercent 90.0}} bad{{else if gte $pool.UsedPercent 75.0}} warn{{end}}"
-                   data-width="{{printf "%.2f" $pool.UsedPercent}}"
-                   style="width:0%"></div>
-            </div>
-            <div class="usage-sizes">
-              <span>Used&nbsp;<b>{{humanBytes $pool.Allocated}}</b></span>
-              <span>Free&nbsp;<b>{{humanBytes $pool.Free}}</b></span>
-              <span>Total&nbsp;<b>{{humanBytes $pool.Size}}</b></span>
-            </div>
-          </div>
-          {{end}}
-
-          <hr class="divider" aria-hidden="true">
-
-          <!-- Pool stats sourced from zfs_exporter pool metrics -->
-          <div class="stats">
-            <div class="stat">
-              <span class="stat-lbl">Dedup</span>
-              <span class="stat-val">{{printf "%.2fx" $pool.DedupRatio}}</span>
-            </div>
-            <div class="stat">
-              <span class="stat-lbl">Fragmentation</span>
-              <span class="stat-val">{{printf "%.0f%%" (mul100 $pool.FragmentationRatio)}}</span>
-            </div>
-            <div class="stat">
-              <span class="stat-lbl">Freeing</span>
-              <span class="stat-val">{{humanBytes $pool.Freeing}}</span>
-            </div>
-            <div class="stat">
-              <span class="stat-lbl">Leaked</span>
-              <span class="stat-val">{{humanBytes $pool.LeakedBytes}}</span>
-            </div>
-          </div>
-
-          <!-- Pool state chips -->
-          <div class="err-row">
-            <span class="chip{{if $pool.ReadOnly}} hot{{end}}">Readonly&nbsp;{{if $pool.ReadOnly}}yes{{else}}no{{end}}</span>
-            <span class="chip{{if gt0 $pool.Freeing}} hot{{end}}">Freeing&nbsp;{{humanBytes $pool.Freeing}}</span>
-            <span class="chip{{if gt0 $pool.LeakedBytes}} hot{{end}}">Leaked&nbsp;{{humanBytes $pool.LeakedBytes}}</span>
-          </div>
-
-        </article>
-        {{end}}
-      </div>
+    <div class="pools-grid">
+      {{range $pi, $pool := $node.Pools}}
+      {{template "poolCard" dict "pool" $pool "ni" $ni "pi" $pi}}
       {{end}}
+    </div>
     {{end}}
 
   </section>
   {{end}}
+  {{end}}
 
 </main>
 
+<!-- ── Pool Detail Modal ──────────────────────────────── -->
 <div class="pool-detail-overlay" id="pool-detail-overlay" hidden>
   <div class="pool-detail-modal" role="dialog" aria-modal="true" aria-labelledby="pool-detail-title">
     <div class="pool-detail-head">
@@ -716,7 +921,10 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
         <div class="pool-detail-sub" id="pool-detail-sub"></div>
       </div>
       <button class="pool-detail-close" id="pool-detail-close" aria-label="Close pool details">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" aria-hidden="true">
+          <path d="M18 6 6 18M6 6l12 12"/>
+        </svg>
       </button>
     </div>
     <div class="pool-detail-body" id="pool-detail-body"></div>
@@ -726,6 +934,78 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 <!-- auto-refresh progress bar -->
 <div id="rbar" aria-hidden="true"></div>
 
+{{/* ── Pool Card Sub-template ── */}}
+{{define "poolCard"}}
+<article class="pool-card"
+         aria-label="Pool {{.pool.Name}}"
+         data-node-index="{{.ni}}"
+         data-pool-index="{{.pi}}"
+         data-has-datasets="{{if .pool.Datasets}}true{{else}}false{{end}}">
+
+  <div class="pool-top">
+    <div>
+      <div class="pool-name">{{.pool.Name}}</div>
+      <div class="pool-sub">zfs pool</div>
+    </div>
+    <span class="hbadge {{healthClass .pool.Health}}">
+      <span class="hbadge-dot" aria-hidden="true"></span>
+      {{.pool.Health}}
+    </span>
+  </div>
+
+  {{if gt .pool.Size 0.0}}
+  <div class="usage">
+    <div class="usage-header">
+      <span>Capacity used</span>
+      <span class="usage-pct">{{printf "%.1f" .pool.UsedPercent}}%</span>
+    </div>
+    <div class="bar-track"
+         role="progressbar"
+         aria-valuenow="{{printf "%.0f" .pool.UsedPercent}}"
+         aria-valuemin="0" aria-valuemax="100"
+         aria-label="{{printf "%.1f" .pool.UsedPercent}}% used">
+      <div class="bar-fill{{if gte .pool.UsedPercent 90.0}} bad{{else if gte .pool.UsedPercent 75.0}} warn{{end}}"
+           data-width="{{printf "%.2f" .pool.UsedPercent}}"
+           style="width:0%"></div>
+    </div>
+    <div class="usage-sizes">
+      <span>Used&nbsp;<b>{{humanBytes .pool.Allocated}}</b></span>
+      <span>Free&nbsp;<b>{{humanBytes .pool.Free}}</b></span>
+      <span>Total&nbsp;<b>{{humanBytes .pool.Size}}</b></span>
+    </div>
+  </div>
+  {{end}}
+
+  <hr class="divider" aria-hidden="true">
+
+  <div class="stats">
+    <div class="stat">
+      <span class="stat-lbl">Dedup</span>
+      <span class="stat-val">{{printf "%.2fx" .pool.DedupRatio}}</span>
+    </div>
+    <div class="stat">
+      <span class="stat-lbl">Fragmentation</span>
+      <span class="stat-val">{{printf "%.0f%%" (mul100 .pool.FragmentationRatio)}}</span>
+    </div>
+    <div class="stat">
+      <span class="stat-lbl">Freeing</span>
+      <span class="stat-val">{{humanBytes .pool.Freeing}}</span>
+    </div>
+    <div class="stat">
+      <span class="stat-lbl">Leaked</span>
+      <span class="stat-val">{{humanBytes .pool.LeakedBytes}}</span>
+    </div>
+  </div>
+
+  <div class="err-row">
+    <span class="chip{{if .pool.ReadOnly}} hot{{end}}">Readonly&nbsp;{{if .pool.ReadOnly}}yes{{else}}no{{end}}</span>
+    <span class="chip{{if gt0 .pool.Freeing}} hot{{end}}">Freeing&nbsp;{{humanBytes .pool.Freeing}}</span>
+    <span class="chip{{if gt0 .pool.LeakedBytes}} hot{{end}}">Leaked&nbsp;{{humanBytes .pool.LeakedBytes}}</span>
+  </div>
+
+</article>
+{{end}}
+
 <script>
 (function () {
   'use strict';
@@ -733,122 +1013,118 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   const nodes = {{safeJS (toJSON .Nodes)}};
 
   /* ── Theme toggle ─────────────────────────────────── */
-  const html = document.documentElement;
-  const btn  = document.querySelector('[data-theme-toggle]');
+  const html    = document.documentElement;
+  const themeBtn = document.querySelector('[data-theme-toggle]');
   const themeKey = 'zfs-dash-theme';
   let theme;
-
-  try {
-    theme = localStorage.getItem(themeKey);
-  } catch (_) {
-    theme = null;
-  }
-
+  try { theme = localStorage.getItem(themeKey); } catch (_) { theme = null; }
   if (theme !== 'dark' && theme !== 'light') {
     theme = window.matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light';
   }
-
-  html.setAttribute('data-theme', theme);
 
   const moonSVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
   const sunSVG  = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>';
 
   function applyTheme(t) {
     html.setAttribute('data-theme', t);
-    if (btn) {
-      btn.innerHTML = t === 'dark' ? moonSVG : sunSVG;
-      btn.setAttribute('aria-label', 'Switch to ' + (t === 'dark' ? 'light' : 'dark') + ' mode');
+    if (themeBtn) {
+      themeBtn.innerHTML = t === 'dark' ? moonSVG : sunSVG;
+      themeBtn.setAttribute('aria-label', 'Switch to ' + (t === 'dark' ? 'light' : 'dark') + ' mode');
     }
   }
   applyTheme(theme);
-
-  if (btn) {
-    btn.addEventListener('click', function () {
+  if (themeBtn) {
+    themeBtn.addEventListener('click', function () {
       theme = theme === 'dark' ? 'light' : 'dark';
-      try {
-        localStorage.setItem(themeKey, theme);
-      } catch (_) {}
+      try { localStorage.setItem(themeKey, theme); } catch (_) {}
       applyTheme(theme);
     });
   }
 
+  /* ── Alert section toggles ────────────────────────── */
+  ['unreachable', 'degraded', 'faulted'].forEach(function (id) {
+    const toggle  = document.getElementById('toggle-' + id);
+    const body    = document.getElementById('body-' + id);
+    const arrow   = document.getElementById('arrow-' + id);
+    const divider = document.getElementById('divider-' + id);
+    if (!toggle || !body) return;
+
+    toggle.addEventListener('click', function () {
+      const isOpen = toggle.getAttribute('aria-expanded') === 'true';
+      const nowOpen = !isOpen;
+      toggle.setAttribute('aria-expanded', String(nowOpen));
+      body.classList.toggle('collapsed', !nowOpen);
+      if (arrow)   arrow.classList.toggle('open', nowOpen);
+      if (divider) divider.classList.toggle('hidden', !nowOpen);
+    });
+  });
+
   /* ── Pool detail modal ────────────────────────────── */
-  const overlay = document.getElementById('pool-detail-overlay');
-  const closeBtn = document.getElementById('pool-detail-close');
+  const overlay    = document.getElementById('pool-detail-overlay');
+  const closeBtn   = document.getElementById('pool-detail-close');
   const detailTitle = document.getElementById('pool-detail-title');
-  const detailSub = document.getElementById('pool-detail-sub');
+  const detailSub  = document.getElementById('pool-detail-sub');
   const detailBody = document.getElementById('pool-detail-body');
 
   function fmtBytes(value) {
-    const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB'];
+    const units = ['B','KB','MB','GB','TB','PB','EB'];
     let n = Number(value) || 0;
     if (n < 1024) return Math.round(n) + ' B';
     let exp = 0;
-    while (n >= 1024 && exp < units.length - 1) {
-      n /= 1024;
-      exp += 1;
-    }
+    while (n >= 1024 && exp < units.length - 1) { n /= 1024; exp++; }
     return n.toFixed(2) + ' ' + units[exp];
+  }
+
+  function esc(v) {
+    return String(v)
+      .replaceAll('&','&amp;').replaceAll('<','&lt;')
+      .replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
   }
 
   function metric(label, value, hot) {
     return '<div class="dataset-metric">'
-      + '<span class="dataset-metric-label">' + escapeHtml(label) + '</span>'
-      + '<span class="dataset-metric-value' + (hot ? ' hot' : '') + '">' + escapeHtml(value) + '</span>'
+      + '<span class="dataset-metric-label">' + esc(label) + '</span>'
+      + '<span class="dataset-metric-value' + (hot ? ' hot' : '') + '">' + esc(value) + '</span>'
       + '</div>';
-  }
-
-  function escapeHtml(value) {
-    return String(value)
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;')
-      .replaceAll('"', '&quot;')
-      .replaceAll("'", '&#39;');
   }
 
   function renderDataset(ds) {
-    let metrics = '';
-    metrics += metric('Used', fmtBytes(ds.used) + (ds.used_percent > 0 ? ' (' + ds.used_percent.toFixed(1) + '%)' : ''), false);
-    metrics += metric('Available', fmtBytes(ds.available), false);
-    metrics += metric('Quota', ds.quota > 0 ? fmtBytes(ds.quota) + ' (' + ds.quota_used_percent.toFixed(1) + '%)' : 'none', ds.quota_used_percent >= 90);
-    metrics += metric('Written', fmtBytes(ds.written), false);
-    metrics += metric('Logical', fmtBytes(ds.logical_used), false);
-    metrics += metric('Physical', fmtBytes(ds.used_by_dataset), false);
-    if (ds.volume_size > 0) {
-      metrics += metric('Volume Size', fmtBytes(ds.volume_size) + ' (' + ds.volume_used_percent.toFixed(1) + '%)', false);
-    }
-    metrics += metric('Referenced', fmtBytes(ds.referenced), false);
-
+    let m = '';
+    m += metric('Used',     fmtBytes(ds.used) + (ds.used_percent > 0 ? ' (' + ds.used_percent.toFixed(1) + '%)' : ''), false);
+    m += metric('Available', fmtBytes(ds.available), false);
+    m += metric('Quota',    ds.quota > 0 ? fmtBytes(ds.quota) + ' (' + ds.quota_used_percent.toFixed(1) + '%)' : 'none', ds.quota_used_percent >= 90);
+    m += metric('Written',  fmtBytes(ds.written), false);
+    m += metric('Logical',  fmtBytes(ds.logical_used), false);
+    m += metric('Physical', fmtBytes(ds.used_by_dataset), false);
+    if (ds.volume_size > 0) m += metric('Volume Size', fmtBytes(ds.volume_size) + ' (' + ds.volume_used_percent.toFixed(1) + '%)', false);
+    m += metric('Referenced', fmtBytes(ds.referenced), false);
     return '<div class="dataset-item">'
       + '<div class="dataset-item-top">'
-      + '<div class="dataset-name">' + escapeHtml(ds.name) + '</div>'
-      + '<div class="dataset-kind">' + escapeHtml(ds.type) + '</div>'
-      + '</div>'
-      + '<div class="dataset-grid">' + metrics + '</div>'
-      + '</div>';
+      + '<div class="dataset-name">' + esc(ds.name) + '</div>'
+      + '<div class="dataset-kind">' + esc(ds.type) + '</div>'
+      + '</div><div class="dataset-grid">' + m + '</div></div>';
   }
 
   function closeModal() {
     if (!overlay) return;
     overlay.hidden = true;
     overlay.classList.remove('open');
-    detailBody.innerHTML = '';
+    if (detailBody) detailBody.innerHTML = '';
   }
 
-  function openPoolDetail(nodeIndex, poolIndex) {
-    const node = nodes[nodeIndex];
-    const pool = node && node.pools ? node.pools[poolIndex] : null;
-    if (!pool || !overlay || !detailTitle || !detailBody) return;
+  function openPoolDetail(ni, pi) {
+    const node = nodes[ni];
+    const pool = node && node.pools ? node.pools[pi] : null;
+    if (!pool || !overlay) return;
 
     detailTitle.textContent = pool.name + ' datasets';
-    detailSub.textContent = node.label + (node.location ? ' · ' + node.location : '') + ' · ' + pool.health;
+    detailSub.textContent = node.label
+      + (node.location ? ' · ' + node.location : '')
+      + ' · ' + pool.health;
 
-    if (!pool.datasets || pool.datasets.length === 0) {
-      detailBody.innerHTML = '<div class="pool-detail-empty">No dataset metrics available for this pool.</div>';
-    } else {
-      detailBody.innerHTML = '<div class="dataset-list">' + pool.datasets.map(renderDataset).join('') + '</div>';
-    }
+    detailBody.innerHTML = (!pool.datasets || pool.datasets.length === 0)
+      ? '<div class="pool-detail-empty">No dataset metrics available for this pool.</div>'
+      : '<div class="dataset-list">' + pool.datasets.map(renderDataset).join('') + '</div>';
 
     overlay.hidden = false;
     overlay.classList.add('open');
@@ -856,62 +1132,36 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 
   document.querySelectorAll('.pool-card[data-has-datasets="true"]').forEach(function (card) {
     card.addEventListener('click', function () {
-      openPoolDetail(card.dataset.nodeIndex, card.dataset.poolIndex);
+      openPoolDetail(+card.dataset.nodeIndex, +card.dataset.poolIndex);
     });
   });
 
-  if (closeBtn) {
-    closeBtn.addEventListener('click', closeModal);
-  }
-  if (overlay) {
-    overlay.addEventListener('click', function (event) {
-      if (event.target === overlay) closeModal();
-    });
-  }
-  document.addEventListener('keydown', function (event) {
-    if (event.key === 'Escape') closeModal();
-  });
-
-  /* ── Failures toggle ─────────────────────────────── */
-  const ftoggle = document.getElementById('failures-toggle');
-  const fbody = document.getElementById('failures-body');
-  const farrow = document.getElementById('failures-arrow');
-  if (ftoggle && fbody) {
-    ftoggle.addEventListener('click', function () {
-      const isOpen = ftoggle.getAttribute('aria-expanded') === 'true';
-      ftoggle.setAttribute('aria-expanded', String(!isOpen));
-      fbody.classList.toggle('collapsed', isOpen);
-      if (farrow) farrow.classList.toggle('open', !isOpen);
-    });
-  }
+  if (closeBtn)  closeBtn.addEventListener('click', closeModal);
+  if (overlay)   overlay.addEventListener('click', function (e) { if (e.target === overlay) closeModal(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeModal(); });
 
   /* ── Animate usage bars ───────────────────────────── */
   document.querySelectorAll('.bar-fill[data-width]').forEach(function (el) {
     const target = el.getAttribute('data-width') + '%';
     requestAnimationFrame(function () {
-      requestAnimationFrame(function () {
-        el.style.width = target;
-      });
+      requestAnimationFrame(function () { el.style.width = target; });
     });
   });
 
-  /* ── Auto-refresh progress bar ────────────────────── */
+  /* ── Auto-refresh progress bar & reload ───────────── */
   const REFRESH_MS = {{.RefreshSecs}} * 1000;
   const rbar = document.getElementById('rbar');
   const startAt = Date.now();
 
   function tickBar() {
-    const elapsed = Date.now() - startAt;
-    const pct = Math.min(elapsed / REFRESH_MS * 100, 100);
+    const pct = Math.min((Date.now() - startAt) / REFRESH_MS * 100, 100);
     if (rbar) rbar.style.width = pct + '%';
     if (pct < 100) requestAnimationFrame(tickBar);
   }
   requestAnimationFrame(tickBar);
-
-  /* Reload page after refresh interval */
   setTimeout(function () { location.reload(); }, REFRESH_MS);
 
-  /* Update the timestamp shown in the topbar */
+  /* Live clock in topbar */
   const tsEl = document.getElementById('ts');
   if (tsEl) {
     tsEl.textContent = new Date().toLocaleTimeString([], {
