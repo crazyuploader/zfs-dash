@@ -48,6 +48,7 @@ func (f *Fetcher) FetchAll(ctx context.Context) []model.NodeData {
 func (f *Fetcher) fetchOne(ctx context.Context, ep config.Endpoint) model.NodeData {
 	nd := model.NodeData{
 		Label:     ep.Label,
+		Location:  ep.Location,
 		URL:       ep.URL,
 		FetchedAt: time.Now(),
 	}

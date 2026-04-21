@@ -16,7 +16,7 @@ RUN apk --no-cache add ca-certificates tzdata wget
 
 COPY --from=builder /app/zfs-dash /zfs-dash
 
-EXPOSE 8080
+EXPOSE 8054
 
 ENTRYPOINT ["/zfs-dash"]
 CMD ["serve"]

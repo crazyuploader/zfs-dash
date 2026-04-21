@@ -9,17 +9,18 @@ cp config.yaml.example config.yaml
 go run . serve --config config.yaml
 ```
 
-Open `http://localhost:8080`.
+Open `http://localhost:8054`.
 
 ## Config
 
 ```yaml
-addr: ":8080"
+addr: ":8054"
 refresh: 30
 
 endpoints:
   - url: "http://host1:9134/metrics"
     label: "node-1"
+    location: "Singapore"
 ```
 
 ## Docker

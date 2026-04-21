@@ -43,6 +43,7 @@ type Pool struct {
 // NodeData holds all pool data fetched from one endpoint.
 type NodeData struct {
 	Label     string    `json:"label"`
+	Location  string    `json:"location,omitempty"`
 	URL       string    `json:"url"`
 	FetchedAt time.Time `json:"fetched_at"`
 	Error     string    `json:"error,omitempty"`

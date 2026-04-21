@@ -1,8 +1,10 @@
-addr: ":8080"
-refresh: 30
+addr: ":8054"
+refresh: 300
 
 endpoints:
   - url: "http://host1:9134/metrics"
     label: "node-1"
+    location: "Singapore"
   - url: "http://host2:9134/metrics"
     label: "node-2"
+    location: "Mumbai"

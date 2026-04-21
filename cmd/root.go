@@ -32,7 +32,7 @@ func init() {
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default ./config.yaml)")
 	rootCmd.PersistentFlags().StringSlice("endpoints", nil, "ZFS exporter /metrics URLs (comma-separated or repeated)")
-	rootCmd.PersistentFlags().String("addr", ":8080", "listen address")
+	rootCmd.PersistentFlags().String("addr", ":8054", "listen address")
 	rootCmd.PersistentFlags().Int("refresh", 30, "auto-refresh interval in seconds")
 
 	_ = viper.BindPFlag("endpoints", rootCmd.PersistentFlags().Lookup("endpoints"))

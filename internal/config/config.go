@@ -10,8 +10,9 @@ import (
 
 // Endpoint is a single ZFS exporter target.
 type Endpoint struct {
-	URL   string `mapstructure:"url"`
-	Label string `mapstructure:"label"`
+	URL      string `mapstructure:"url"`
+	Label    string `mapstructure:"label"`
+	Location string `mapstructure:"location"`
 }
 
 // Config holds all runtime options.
@@ -24,7 +25,7 @@ type Config struct {
 // Load reads viper state into a validated Config.
 func Load() (*Config, error) {
 	cfg := &Config{
-		Addr:    cmp.Or(viper.GetString("addr"), ":8080"),
+		Addr:    cmp.Or(viper.GetString("addr"), ":8054"),
 		Refresh: time.Duration(viper.GetInt("refresh")) * time.Second,
 	}
 	if cfg.Refresh <= 0 {

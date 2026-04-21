@@ -198,8 +198,23 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   background: var(--primary-dim); color: var(--primary);
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
+.node-label-row { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 .node-label { font-size: var(--text-base); font-weight: 600; letter-spacing: -0.01em; }
-.node-url   { font-size: var(--text-xs); color: var(--text-muted); font-family: var(--font-mono); }
+.node-meta  { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.node-location {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 9px; border-radius: var(--radius-full);
+  background: color-mix(in oklab, var(--primary) 14%, transparent);
+  border: 1px solid color-mix(in oklab, var(--primary) 24%, transparent);
+  color: var(--primary); font-size: 0.68rem; font-weight: 700;
+  letter-spacing: 0.04em; text-transform: uppercase;
+}
+.node-location::before {
+  content: "";
+  width: 5px; height: 5px; border-radius: 50%;
+  background: currentColor; opacity: 0.9;
+}
+.node-url   { font-size: var(--text-xs); color: var(--text-faint); font-family: var(--font-mono); }
 .node-ts    { margin-left: auto; font-size: var(--text-xs); color: var(--text-faint); font-family: var(--font-mono); }
 
 /* ── Error Banner ────────────────────────────────────── */
@@ -341,6 +356,9 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   .kpi-row { grid-template-columns: 1fr 1fr; }
   .pools-grid { grid-template-columns: 1fr; }
   .topbar-meta span:nth-child(n+3) { display: none; }
+  .node-head { align-items: flex-start; }
+  .node-meta { flex: 1; }
+  .node-ts { margin-left: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -438,8 +456,11 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
           <path d="M8 7h8M8 12h8M8 17h4"/>
         </svg>
       </div>
-      <div>
-        <div class="node-label">{{.Label}}</div>
+      <div class="node-meta">
+        <div class="node-label-row">
+          <div class="node-label">{{.Label}}</div>
+          {{if .Location}}<div class="node-location">{{.Location}}</div>{{end}}
+        </div>
         <div class="node-url">{{.URL}}</div>
       </div>
       <div class="node-ts" aria-label="Fetched at">{{fmtNodeTime .FetchedAt}}</div>
@@ -557,7 +578,19 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   /* ── Theme toggle ─────────────────────────────────── */
   const html = document.documentElement;
   const btn  = document.querySelector('[data-theme-toggle]');
-  let theme  = window.matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light';
+  const themeKey = 'zfs-dash-theme';
+  let theme;
+
+  try {
+    theme = localStorage.getItem(themeKey);
+  } catch (_) {
+    theme = null;
+  }
+
+  if (theme !== 'dark' && theme !== 'light') {
+    theme = window.matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light';
+  }
+
   html.setAttribute('data-theme', theme);
 
   const moonSVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
@@ -575,6 +608,9 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   if (btn) {
     btn.addEventListener('click', function () {
       theme = theme === 'dark' ? 'light' : 'dark';
+      try {
+        localStorage.setItem(themeKey, theme);
+      } catch (_) {}
       applyTheme(theme);
     });
   }
