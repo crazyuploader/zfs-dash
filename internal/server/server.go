@@ -29,6 +29,7 @@ type templateData struct {
 	RefreshSecs   int
 	FetchedAt     string // human-readable timestamp of the current fetch
 	TotalPools    int
+	UnreachableNodes int
 	HealthyPools  int
 	DegradedPools int
 	ErroredPools  int
@@ -95,6 +96,9 @@ func buildTemplateData(nodes []model.NodeData, cfg *config.Config) templateData 
 		TotalNodes:  len(nodes),
 	}
 	for _, n := range nodes {
+		if n.Error != "" {
+			d.UnreachableNodes++
+		}
 		for _, p := range n.Pools {
 			d.TotalPools++
 			switch p.Health {
@@ -107,6 +111,7 @@ func buildTemplateData(nodes []model.NodeData, cfg *config.Config) templateData 
 			}
 		}
 	}
+
 	return d
 }
 
@@ -120,7 +125,6 @@ func serveHealthCheck(c fiber.Ctx, f *fetcher.Fetcher, label, poolName string) e
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"status": "not_found",
 			"label":  label,
-			"error":  err.Error(),
 		})
 	}
 
@@ -129,7 +133,6 @@ func serveHealthCheck(c fiber.Ctx, f *fetcher.Fetcher, label, poolName string) e
 			"status":   "down",
 			"label":    node.Label,
 			"location": node.Location,
-			"error":    node.Error,
 		})
 	}
 
@@ -163,9 +166,8 @@ func serveHealthCheck(c fiber.Ctx, f *fetcher.Fetcher, label, poolName string) e
 			"status": "not_found",
 			"label":  node.Label,
 			"pool":   poolName,
-			"error":  err.Error(),
 		})
-	}
+		}
 
 	status := fiber.StatusOK
 	state := "up"

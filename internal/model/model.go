@@ -38,6 +38,25 @@ type Pool struct {
 	FragmentationRatio float64    `json:"fragmentation_ratio"`
 	ReadOnly           bool       `json:"read_only"`
 	UsedPercent        float64    `json:"used_percent"`
+	Datasets           []Dataset  `json:"datasets,omitempty"`
+}
+
+// Dataset holds filesystem, volume, or snapshot metrics within a pool.
+type Dataset struct {
+	Name              string  `json:"name"`
+	Pool              string  `json:"pool"`
+	Type              string  `json:"type"`
+	Available         float64 `json:"available"`
+	LogicalUsed       float64 `json:"logical_used"`
+	Quota             float64 `json:"quota"`
+	Referenced        float64 `json:"referenced"`
+	UsedByDataset     float64 `json:"used_by_dataset"`
+	Used              float64 `json:"used"`
+	VolumeSize        float64 `json:"volume_size"`
+	Written           float64 `json:"written"`
+	UsedPercent       float64 `json:"used_percent"`
+	QuotaUsedPercent  float64 `json:"quota_used_percent"`
+	VolumeUsedPercent float64 `json:"volume_used_percent"`
 }
 
 // NodeData holds all pool data fetched from one endpoint.
@@ -74,11 +93,26 @@ func healthFromValue(v float64) PoolHealth {
 // ExtractPools builds Pool structs from a flat Prometheus sample slice.
 func ExtractPools(samples []parser.Sample) []Pool {
 	pools := map[string]*Pool{}
+	datasets := map[string]*Dataset{}
 	ensure := func(name string) *Pool {
 		if _, ok := pools[name]; !ok {
 			pools[name] = &Pool{Name: name, Health: HealthUnknown}
 		}
 		return pools[name]
+	}
+	ensureDataset := func(pool, name, datasetType string) *Dataset {
+		key := pool + "\x00" + name
+		if _, ok := datasets[key]; !ok {
+			datasets[key] = &Dataset{
+				Name: name,
+				Pool: pool,
+				Type: datasetType,
+			}
+		}
+		if datasetType != "" {
+			datasets[key].Type = datasetType
+		}
+		return datasets[key]
 	}
 
 	for _, s := range samples {
@@ -87,6 +121,28 @@ func ExtractPools(samples []parser.Sample) []Pool {
 			continue
 		}
 		p := ensure(pool)
+		if datasetName := s.Labels["name"]; datasetName != "" {
+			d := ensureDataset(pool, datasetName, s.Labels["type"])
+			switch s.Name {
+			case "zfs_dataset_available_bytes":
+				d.Available = s.Value
+			case "zfs_dataset_logical_used_bytes":
+				d.LogicalUsed = s.Value
+			case "zfs_dataset_quota_bytes":
+				d.Quota = s.Value
+			case "zfs_dataset_referenced_bytes":
+				d.Referenced = s.Value
+			case "zfs_dataset_used_by_dataset_bytes":
+				d.UsedByDataset = s.Value
+			case "zfs_dataset_used_bytes":
+				d.Used = s.Value
+			case "zfs_dataset_volume_size_bytes":
+				d.VolumeSize = s.Value
+			case "zfs_dataset_written_bytes":
+				d.Written = s.Value
+			}
+		}
+
 		switch s.Name {
 		case "zfs_pool_health":
 			p.Health = healthFromValue(s.Value)
@@ -110,6 +166,22 @@ func ExtractPools(samples []parser.Sample) []Pool {
 	}
 
 	result := make([]Pool, 0, len(pools))
+	for _, d := range datasets {
+		if d.Used > 0 && d.Available > 0 {
+			total := d.Used + d.Available
+			d.UsedPercent = math.Round((d.Used/total)*10000) / 100
+		}
+		if d.Quota > 0 {
+			d.QuotaUsedPercent = math.Round((d.Used/d.Quota)*10000) / 100
+		}
+		if d.VolumeSize > 0 {
+			d.VolumeUsedPercent = math.Round((d.Used/d.VolumeSize)*10000) / 100
+		}
+		if p, ok := pools[d.Pool]; ok {
+			p.Datasets = append(p.Datasets, *d)
+		}
+	}
+
 	for _, p := range pools {
 		if p.Size > 0 {
 			if p.Allocated > 0 && p.Free == 0 {
@@ -119,6 +191,15 @@ func ExtractPools(samples []parser.Sample) []Pool {
 			}
 			p.UsedPercent = math.Round((p.Allocated/p.Size)*10000) / 100
 		}
+		slices.SortFunc(p.Datasets, func(a, b Dataset) int {
+			if a.Used != b.Used {
+				if a.Used > b.Used {
+					return -1
+				}
+				return 1
+			}
+			return strings.Compare(a.Name, b.Name)
+		})
 		result = append(result, *p)
 	}
 

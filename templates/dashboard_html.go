@@ -235,6 +235,69 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 .empty h3  { color: var(--text); font-size: var(--text-base); font-weight: 600; }
 .empty p   { font-size: var(--text-sm); max-width: 38ch; }
 
+/* ── Pool Detail Modal ───────────────────────────────── */
+.pool-card[data-has-datasets="true"] { cursor: pointer; }
+.pool-detail-overlay {
+  position: fixed; inset: 0; z-index: 1200;
+  display: none; align-items: center; justify-content: center;
+  padding: var(--space-4); background: rgba(5, 6, 10, 0.68);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+.pool-detail-overlay.open { display: flex; }
+.pool-detail-modal {
+  width: min(980px, 100%); max-height: min(88dvh, 900px); overflow: auto;
+  background: color-mix(in oklab, var(--surface) 94%, black 6%);
+  border: 1px solid var(--border-hi); border-radius: calc(var(--radius-xl) + 2px);
+  box-shadow: 0 24px 80px rgba(0,0,0,0.45);
+}
+.pool-detail-head {
+  position: sticky; top: 0; z-index: 2;
+  display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4);
+  padding: var(--space-5); background: color-mix(in oklab, var(--surface) 90%, transparent);
+  border-bottom: 1px solid var(--border);
+}
+.pool-detail-title { font-size: var(--text-lg); font-weight: 600; letter-spacing: -0.02em; }
+.pool-detail-sub { margin-top: 4px; font-size: var(--text-xs); color: var(--text-muted); font-family: var(--font-mono); }
+.pool-detail-close {
+  width: 34px; height: 34px; border-radius: var(--radius-md);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted); border: 1px solid var(--border);
+}
+.pool-detail-close:hover { color: var(--text); background: var(--surface-3); }
+.pool-detail-body { padding: var(--space-5); }
+.pool-detail-empty {
+  color: var(--text-muted); font-size: var(--text-sm);
+  padding: var(--space-6) 0;
+}
+.dataset-list { display: grid; gap: var(--space-3); }
+.dataset-item {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: var(--space-4);
+}
+.dataset-item-top {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-3); margin-bottom: var(--space-3);
+}
+.dataset-name {
+  font-family: var(--font-mono); font-size: var(--text-sm); color: var(--text);
+  word-break: break-all;
+}
+.dataset-kind {
+  padding: 2px 7px; border-radius: var(--radius-full);
+  background: var(--surface-3); color: var(--text-muted);
+  font-size: 0.66rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  flex-shrink: 0;
+}
+.dataset-grid {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3);
+}
+.dataset-metric { display: flex; flex-direction: column; gap: 2px; }
+.dataset-metric-label {
+  font-size: 0.68rem; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em;
+}
+.dataset-metric-value { font-size: var(--text-xs); color: var(--text-muted); font-family: var(--font-mono); }
+.dataset-metric-value.hot { color: var(--warning); }
+
 /* ── Pool Grid ───────────────────────────────────────── */
 .pools-grid {
   display: grid;
@@ -355,10 +418,12 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   .topbar  { padding: var(--space-3) var(--space-4); }
   .kpi-row { grid-template-columns: 1fr 1fr; }
   .pools-grid { grid-template-columns: 1fr; }
+  .dataset-grid { grid-template-columns: 1fr; }
   .topbar-meta span:nth-child(n+3) { display: none; }
   .node-head { align-items: flex-start; }
   .node-meta { flex: 1; }
   .node-ts { margin-left: 0; }
+  .pool-detail-head, .pool-detail-body { padding: var(--space-4); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -412,7 +477,7 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   <!-- Page header -->
   <div class="page-header">
     <h1 class="page-title">Pool Overview</h1>
-    <p class="page-sub">{{.TotalNodes}} node{{if gt .TotalNodes 1}}s{{end}} &middot; {{.TotalPools}} pool{{if gt .TotalPools 1}}s{{end}} &middot; fetched {{.FetchedAt}}</p>
+    <p class="page-sub">{{.TotalNodes}} node{{if gt .TotalNodes 1}}s{{end}} &middot; {{.TotalPools}} pool{{if gt .TotalPools 1}}s{{end}} &middot; {{.UnreachableNodes}} unreachable &middot; fetched {{.FetchedAt}}</p>
   </div>
 
   <!-- KPI summary -->
@@ -426,6 +491,11 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
       <div class="kpi-label">Pools</div>
       <div class="kpi-val neutral">{{.TotalPools}}</div>
       <div class="kpi-hint">total</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Unreachable</div>
+      <div class="kpi-val {{if gt .UnreachableNodes 0}}bad{{else}}neutral{{end}}">{{.UnreachableNodes}}</div>
+      <div class="kpi-hint">nodes down</div>
     </div>
     <div class="kpi">
       <div class="kpi-label">Healthy</div>
@@ -445,8 +515,8 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   </div>
 
   <!-- Per-node sections -->
-  {{range .Nodes}}
-  <section class="node" aria-label="Node {{.Label}}">
+  {{range $ni, $node := .Nodes}}
+  <section class="node" aria-label="Node {{$node.Label}}">
 
     <div class="node-head">
       <div class="node-icon-wrap" aria-hidden="true">
@@ -459,14 +529,14 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
       <div class="node-meta">
         <div class="node-label-row">
           <div class="node-label">{{.Label}}</div>
-          {{if .Location}}<div class="node-location">{{.Location}}</div>{{end}}
+          {{if $node.Location}}<div class="node-location">{{$node.Location}}</div>{{end}}
         </div>
-        <div class="node-url">{{.URL}}</div>
+        <div class="node-url">{{$node.URL}}</div>
       </div>
-      <div class="node-ts" aria-label="Fetched at">{{fmtNodeTime .FetchedAt}}</div>
+      <div class="node-ts" aria-label="Fetched at">{{fmtNodeTime $node.FetchedAt}}</div>
     </div>
 
-    {{if .Error}}
+    {{if $node.Error}}
     <div class="node-err" role="alert">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
            stroke-width="2" aria-hidden="true">
@@ -474,10 +544,10 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
         <line x1="12" y1="8" x2="12" y2="12"/>
         <line x1="12" y1="16" x2="12.01" y2="16"/>
       </svg>
-      <span>{{.Error}}</span>
+      <span>{{$node.Error}}</span>
     </div>
     {{else}}
-      {{if not .Pools}}
+      {{if not $node.Pools}}
       <div class="empty">
         <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor"
              stroke-width="1.4" aria-hidden="true">
@@ -489,41 +559,41 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
       </div>
       {{else}}
       <div class="pools-grid">
-        {{range .Pools}}
-        <article class="pool-card" aria-label="Pool {{.Name}}">
+        {{range $pi, $pool := $node.Pools}}
+        <article class="pool-card" aria-label="Pool {{$pool.Name}}" data-node-index="{{$ni}}" data-pool-index="{{$pi}}" data-has-datasets="{{if $pool.Datasets}}true{{else}}false{{end}}">
 
           <!-- Name + health -->
           <div class="pool-top">
             <div>
-              <div class="pool-name">{{.Name}}</div>
+              <div class="pool-name">{{$pool.Name}}</div>
               <div class="pool-sub">zfs pool</div>
             </div>
-            <span class="hbadge {{healthClass .Health}}">
+            <span class="hbadge {{healthClass $pool.Health}}">
               <span class="hbadge-dot" aria-hidden="true"></span>
-              {{.Health}}
+              {{$pool.Health}}
             </span>
           </div>
 
           <!-- Capacity bar (only when size is known) -->
-          {{if gt .Size 0.0}}
+          {{if gt $pool.Size 0.0}}
           <div class="usage">
             <div class="usage-header">
               <span>Capacity used</span>
-              <span class="usage-pct">{{printf "%.1f" .UsedPercent}}%</span>
+              <span class="usage-pct">{{printf "%.1f" $pool.UsedPercent}}%</span>
             </div>
             <div class="bar-track"
                  role="progressbar"
-                 aria-valuenow="{{printf "%.0f" .UsedPercent}}"
+                 aria-valuenow="{{printf "%.0f" $pool.UsedPercent}}"
                  aria-valuemin="0" aria-valuemax="100"
-                 aria-label="{{printf "%.1f" .UsedPercent}}% used">
-              <div class="bar-fill{{if gte .UsedPercent 90.0}} bad{{else if gte .UsedPercent 75.0}} warn{{end}}"
-                   data-width="{{printf "%.2f" .UsedPercent}}"
+                 aria-label="{{printf "%.1f" $pool.UsedPercent}}% used">
+              <div class="bar-fill{{if gte $pool.UsedPercent 90.0}} bad{{else if gte $pool.UsedPercent 75.0}} warn{{end}}"
+                   data-width="{{printf "%.2f" $pool.UsedPercent}}"
                    style="width:0%"></div>
             </div>
             <div class="usage-sizes">
-              <span>Used&nbsp;<b>{{humanBytes .Allocated}}</b></span>
-              <span>Free&nbsp;<b>{{humanBytes .Free}}</b></span>
-              <span>Total&nbsp;<b>{{humanBytes .Size}}</b></span>
+              <span>Used&nbsp;<b>{{humanBytes $pool.Allocated}}</b></span>
+              <span>Free&nbsp;<b>{{humanBytes $pool.Free}}</b></span>
+              <span>Total&nbsp;<b>{{humanBytes $pool.Size}}</b></span>
             </div>
           </div>
           {{end}}
@@ -534,27 +604,27 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
           <div class="stats">
             <div class="stat">
               <span class="stat-lbl">Dedup</span>
-              <span class="stat-val">{{printf "%.2fx" .DedupRatio}}</span>
+              <span class="stat-val">{{printf "%.2fx" $pool.DedupRatio}}</span>
             </div>
             <div class="stat">
               <span class="stat-lbl">Fragmentation</span>
-              <span class="stat-val">{{printf "%.0f%%" (mul100 .FragmentationRatio)}}</span>
+              <span class="stat-val">{{printf "%.0f%%" (mul100 $pool.FragmentationRatio)}}</span>
             </div>
             <div class="stat">
               <span class="stat-lbl">Freeing</span>
-              <span class="stat-val">{{humanBytes .Freeing}}</span>
+              <span class="stat-val">{{humanBytes $pool.Freeing}}</span>
             </div>
             <div class="stat">
               <span class="stat-lbl">Leaked</span>
-              <span class="stat-val">{{humanBytes .LeakedBytes}}</span>
+              <span class="stat-val">{{humanBytes $pool.LeakedBytes}}</span>
             </div>
           </div>
 
           <!-- Pool state chips -->
           <div class="err-row">
-            <span class="chip{{if .ReadOnly}} hot{{end}}">Readonly&nbsp;{{if .ReadOnly}}yes{{else}}no{{end}}</span>
-            <span class="chip{{if gt0 .Freeing}} hot{{end}}">Freeing&nbsp;{{humanBytes .Freeing}}</span>
-            <span class="chip{{if gt0 .LeakedBytes}} hot{{end}}">Leaked&nbsp;{{humanBytes .LeakedBytes}}</span>
+            <span class="chip{{if $pool.ReadOnly}} hot{{end}}">Readonly&nbsp;{{if $pool.ReadOnly}}yes{{else}}no{{end}}</span>
+            <span class="chip{{if gt0 $pool.Freeing}} hot{{end}}">Freeing&nbsp;{{humanBytes $pool.Freeing}}</span>
+            <span class="chip{{if gt0 $pool.LeakedBytes}} hot{{end}}">Leaked&nbsp;{{humanBytes $pool.LeakedBytes}}</span>
           </div>
 
         </article>
@@ -568,12 +638,29 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 
 </main>
 
+<div class="pool-detail-overlay" id="pool-detail-overlay" hidden>
+  <div class="pool-detail-modal" role="dialog" aria-modal="true" aria-labelledby="pool-detail-title">
+    <div class="pool-detail-head">
+      <div>
+        <div class="pool-detail-title" id="pool-detail-title">Pool Details</div>
+        <div class="pool-detail-sub" id="pool-detail-sub"></div>
+      </div>
+      <button class="pool-detail-close" id="pool-detail-close" aria-label="Close pool details">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="pool-detail-body" id="pool-detail-body"></div>
+  </div>
+</div>
+
 <!-- auto-refresh progress bar -->
 <div id="rbar" aria-hidden="true"></div>
 
 <script>
 (function () {
   'use strict';
+
+  const nodes = {{safeJS (toJSON .Nodes)}};
 
   /* ── Theme toggle ─────────────────────────────────── */
   const html = document.documentElement;
@@ -614,6 +701,106 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
       applyTheme(theme);
     });
   }
+
+  /* ── Pool detail modal ────────────────────────────── */
+  const overlay = document.getElementById('pool-detail-overlay');
+  const closeBtn = document.getElementById('pool-detail-close');
+  const detailTitle = document.getElementById('pool-detail-title');
+  const detailSub = document.getElementById('pool-detail-sub');
+  const detailBody = document.getElementById('pool-detail-body');
+
+  function fmtBytes(value) {
+    const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB'];
+    let n = Number(value) || 0;
+    if (n < 1024) return Math.round(n) + ' B';
+    let exp = 0;
+    while (n >= 1024 && exp < units.length - 1) {
+      n /= 1024;
+      exp += 1;
+    }
+    return n.toFixed(2) + ' ' + units[exp];
+  }
+
+  function metric(label, value, hot) {
+    return '<div class="dataset-metric">'
+      + '<span class="dataset-metric-label">' + escapeHtml(label) + '</span>'
+      + '<span class="dataset-metric-value' + (hot ? ' hot' : '') + '">' + escapeHtml(value) + '</span>'
+      + '</div>';
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+  }
+
+  function renderDataset(ds) {
+    let metrics = '';
+    metrics += metric('Used', fmtBytes(ds.used) + (ds.used_percent > 0 ? ' (' + ds.used_percent.toFixed(1) + '%)' : ''), false);
+    metrics += metric('Available', fmtBytes(ds.available), false);
+    metrics += metric('Quota', ds.quota > 0 ? fmtBytes(ds.quota) + ' (' + ds.quota_used_percent.toFixed(1) + '%)' : 'none', ds.quota_used_percent >= 90);
+    metrics += metric('Written', fmtBytes(ds.written), false);
+    metrics += metric('Logical', fmtBytes(ds.logical_used), false);
+    metrics += metric('Physical', fmtBytes(ds.used_by_dataset), false);
+    if (ds.volume_size > 0) {
+      metrics += metric('Volume Size', fmtBytes(ds.volume_size) + ' (' + ds.volume_used_percent.toFixed(1) + '%)', false);
+    }
+    metrics += metric('Referenced', fmtBytes(ds.referenced), false);
+
+    return '<div class="dataset-item">'
+      + '<div class="dataset-item-top">'
+      + '<div class="dataset-name">' + escapeHtml(ds.name) + '</div>'
+      + '<div class="dataset-kind">' + escapeHtml(ds.type) + '</div>'
+      + '</div>'
+      + '<div class="dataset-grid">' + metrics + '</div>'
+      + '</div>';
+  }
+
+  function closeModal() {
+    if (!overlay) return;
+    overlay.hidden = true;
+    overlay.classList.remove('open');
+    detailBody.innerHTML = '';
+  }
+
+  function openPoolDetail(nodeIndex, poolIndex) {
+    const node = nodes[nodeIndex];
+    const pool = node && node.pools ? node.pools[poolIndex] : null;
+    if (!pool || !overlay || !detailTitle || !detailBody) return;
+
+    detailTitle.textContent = pool.name + ' datasets';
+    detailSub.textContent = node.label + (node.location ? ' · ' + node.location : '') + ' · ' + pool.health;
+
+    if (!pool.datasets || pool.datasets.length === 0) {
+      detailBody.innerHTML = '<div class="pool-detail-empty">No dataset metrics available for this pool.</div>';
+    } else {
+      detailBody.innerHTML = '<div class="dataset-list">' + pool.datasets.map(renderDataset).join('') + '</div>';
+    }
+
+    overlay.hidden = false;
+    overlay.classList.add('open');
+  }
+
+  document.querySelectorAll('.pool-card[data-has-datasets="true"]').forEach(function (card) {
+    card.addEventListener('click', function () {
+      openPoolDetail(card.dataset.nodeIndex, card.dataset.poolIndex);
+    });
+  });
+
+  if (closeBtn) {
+    closeBtn.addEventListener('click', closeModal);
+  }
+  if (overlay) {
+    overlay.addEventListener('click', function (event) {
+      if (event.target === overlay) closeModal();
+    });
+  }
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape') closeModal();
+  });
 
   /* ── Animate usage bars ───────────────────────────── */
   document.querySelectorAll('.bar-fill[data-width]').forEach(function (el) {
