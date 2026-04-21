@@ -15,7 +15,7 @@ Open `http://localhost:8054`.
 
 ```yaml
 addr: ":8054"
-refresh: 30
+refresh: 300
 
 endpoints:
   - url: "http://host1:9134/metrics"

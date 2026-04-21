@@ -29,7 +29,7 @@ func Load() (*Config, error) {
 		Refresh: time.Duration(viper.GetInt("refresh")) * time.Second,
 	}
 	if cfg.Refresh <= 0 {
-		cfg.Refresh = 30 * time.Second
+		cfg.Refresh = 300 * time.Second
 	}
 
 	// Try structured endpoints block (config file).
