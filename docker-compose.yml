@@ -1,11 +1,13 @@
 services:
   zfs-dash:
     image: ghcr.io/crazyuploader/zfs-dash:main
+    container_name: zfs-dash
+    user: 1000:1000
     command: ["serve", "--config", "/config/config.yaml"]
     ports:
       - "8054:8054"
     volumes:
-      - ./config.yaml.example:/config/config.yaml:ro
+      - ./config.yaml:/config/config.yaml:ro
     environment:
       - TZ=Asia/Kolkata
     restart: unless-stopped
