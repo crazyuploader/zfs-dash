@@ -59,6 +59,14 @@ func Start(cfg *config.Config) error {
 		return c.JSON(nodes)
 	})
 
+	app.Get("/api/health/:label", func(c fiber.Ctx) error {
+		return serveHealthCheck(c, f, c.Params("label"), "")
+	})
+
+	app.Get("/api/health/:label/:pool", func(c fiber.Ctx) error {
+		return serveHealthCheck(c, f, c.Params("label"), c.Params("pool"))
+	})
+
 	// Dashboard — SSR HTML page.
 	app.Get("/", func(c fiber.Ctx) error {
 		ctx, cancel := context.WithTimeout(c.Context(), 15*time.Second)
@@ -100,6 +108,99 @@ func buildTemplateData(nodes []model.NodeData, cfg *config.Config) templateData 
 		}
 	}
 	return d
+}
+
+func serveHealthCheck(c fiber.Ctx, f *fetcher.Fetcher, label, poolName string) error {
+	ctx, cancel := context.WithTimeout(c.Context(), 15*time.Second)
+	defer cancel()
+
+	nodes := f.FetchAll(ctx)
+	node, err := findNodeByLabel(nodes, label)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"status": "not_found",
+			"label":  label,
+			"error":  err.Error(),
+		})
+	}
+
+	if node.Error != "" {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+			"status":   "down",
+			"label":    node.Label,
+			"location": node.Location,
+			"error":    node.Error,
+		})
+	}
+
+	if poolName == "" {
+		badPools := []string{}
+		for _, pool := range node.Pools {
+			if pool.Health != model.HealthOnline {
+				badPools = append(badPools, pool.Name)
+			}
+		}
+
+		status := fiber.StatusOK
+		state := "up"
+		if len(badPools) > 0 {
+			status = fiber.StatusServiceUnavailable
+			state = "degraded"
+		}
+
+		return c.Status(status).JSON(fiber.Map{
+			"status":          state,
+			"label":           node.Label,
+			"location":        node.Location,
+			"pool_count":      len(node.Pools),
+			"unhealthy_pools": badPools,
+		})
+	}
+
+	pool, err := findPoolByName(node.Pools, poolName)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"status": "not_found",
+			"label":  node.Label,
+			"pool":   poolName,
+			"error":  err.Error(),
+		})
+	}
+
+	status := fiber.StatusOK
+	state := "up"
+	if pool.Health != model.HealthOnline {
+		status = fiber.StatusServiceUnavailable
+		state = "degraded"
+	}
+
+	return c.Status(status).JSON(fiber.Map{
+		"status":   state,
+		"label":    node.Label,
+		"location": node.Location,
+		"pool":     pool.Name,
+		"health":   pool.Health,
+	})
+}
+
+func findNodeByLabel(nodes []model.NodeData, label string) (*model.NodeData, error) {
+	for i := range nodes {
+		if nodes[i].Label == label {
+			return &nodes[i], nil
+		}
+	}
+
+	return nil, fmt.Errorf("label %q not found", label)
+}
+
+func findPoolByName(pools []model.Pool, name string) (*model.Pool, error) {
+	for i := range pools {
+		if pools[i].Name == name {
+			return &pools[i], nil
+		}
+	}
+
+	return nil, fmt.Errorf("pool %q not found", name)
 }
 
 func funcMap() template.FuncMap {

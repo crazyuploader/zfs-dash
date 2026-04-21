@@ -35,4 +35,11 @@ Edit `config.yaml.example` before starting the stack.
 
 - `GET /`
 - `GET /api/metrics`
+- `GET /api/health/:label`
+- `GET /api/health/:label/:pool`
 - `GET /health`
+
+Examples:
+
+- `GET /api/health/node-1`
+- `GET /api/health/node-1/tank`
