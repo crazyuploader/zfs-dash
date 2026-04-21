@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/yourname/zfs-dash/internal/config"
-	"github.com/yourname/zfs-dash/internal/model"
-	"github.com/yourname/zfs-dash/internal/parser"
+	"github.com/crazyuploader/zfs-dash/internal/config"
+	"github.com/crazyuploader/zfs-dash/internal/model"
+	"github.com/crazyuploader/zfs-dash/internal/parser"
 )
 
 const fetchTimeout = 10 * time.Second
@@ -36,11 +36,9 @@ func (f *Fetcher) FetchAll(ctx context.Context) []model.NodeData {
 	results := make([]model.NodeData, len(f.endpoints))
 	var wg sync.WaitGroup
 	for i, ep := range f.endpoints {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			results[i] = f.fetchOne(ctx, ep)
-		}()
+		})
 	}
 	wg.Wait()
 	return results

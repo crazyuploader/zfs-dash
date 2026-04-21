@@ -1,6 +1,6 @@
-module github.com/yourname/zfs-dash
+module github.com/crazyuploader/zfs-dash
 
-go 1.26.0
+go 1.26.2
 
 require (
 	github.com/gofiber/fiber/v3 v3.1.0

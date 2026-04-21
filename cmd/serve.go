@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/crazyuploader/zfs-dash/internal/config"
+	"github.com/crazyuploader/zfs-dash/internal/server"
 	"github.com/spf13/cobra"
-	"github.com/yourname/zfs-dash/internal/config"
-	"github.com/yourname/zfs-dash/internal/server"
 )
 
 var serveCmd = &cobra.Command{

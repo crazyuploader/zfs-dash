@@ -1,6 +1,6 @@
 package main
 
-import "github.com/yourname/zfs-dash/cmd"
+import "github.com/crazyuploader/zfs-dash/cmd"
 
 func main() {
 	cmd.Execute()

@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/crazyuploader/zfs-dash/internal/config"
+	"github.com/crazyuploader/zfs-dash/internal/fetcher"
+	"github.com/crazyuploader/zfs-dash/internal/model"
+	"github.com/crazyuploader/zfs-dash/templates"
 	"github.com/gofiber/fiber/v3"
-	"github.com/yourname/zfs-dash/internal/config"
-	"github.com/yourname/zfs-dash/internal/fetcher"
-	"github.com/yourname/zfs-dash/internal/model"
-	"github.com/yourname/zfs-dash/templates"
 )
 
 // templateData is the data passed to the HTML template.
