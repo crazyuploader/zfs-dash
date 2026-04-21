@@ -4,6 +4,8 @@ package model
 import (
 	"fmt"
 	"math"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/yourname/zfs-dash/internal/parser"
@@ -121,6 +123,11 @@ func ExtractPools(samples []parser.Sample) []Pool {
 		}
 		result = append(result, *p)
 	}
+
+	slices.SortFunc(result, func(a, b Pool) int {
+		return strings.Compare(a.Name, b.Name)
+	})
+
 	return result
 }
 

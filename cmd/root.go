@@ -11,9 +11,11 @@ import (
 var cfgFile string
 
 var rootCmd = &cobra.Command{
-	Use:   "zfs-dash",
-	Short: "ZFS Dashboard — real-time pool monitoring",
-	Long:  `Pull ZFS exporter metrics from multiple Prometheus endpoints and serve a minimal real-time dashboard.`,
+	Use:           "zfs-dash",
+	Short:         "ZFS Dashboard — real-time pool monitoring",
+	Long:          `Pull ZFS exporter metrics from multiple Prometheus endpoints and serve a minimal real-time dashboard.`,
+	SilenceUsage:  true,
+	SilenceErrors: true,
 }
 
 func Execute() {

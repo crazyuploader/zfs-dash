@@ -33,6 +33,11 @@ type templateData struct {
 func Start(cfg *config.Config) error {
 	f := fetcher.New(cfg.Endpoints)
 
+	tmpl, err := template.New("dashboard").Funcs(funcMap()).Parse(templates.Dashboard)
+	if err != nil {
+		return fmt.Errorf("template parse: %w", err)
+	}
+
 	app := fiber.New(fiber.Config{
 		AppName: "zfs-dash",
 	})
@@ -52,11 +57,6 @@ func Start(cfg *config.Config) error {
 
 		nodes := f.FetchAll(ctx)
 		data := buildTemplateData(nodes, cfg)
-
-		tmpl, err := template.New("dashboard").Funcs(funcMap()).Parse(templates.Dashboard)
-		if err != nil {
-			return fmt.Errorf("template parse: %w", err)
-		}
 
 		c.Set("Content-Type", "text/html; charset=utf-8")
 		return tmpl.Execute(c.Response().BodyWriter(), data)

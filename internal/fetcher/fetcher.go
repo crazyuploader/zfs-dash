@@ -37,10 +37,10 @@ func (f *Fetcher) FetchAll(ctx context.Context) []model.NodeData {
 	var wg sync.WaitGroup
 	for i, ep := range f.endpoints {
 		wg.Add(1)
-		go func(idx int, ep config.Endpoint) {
+		go func() {
 			defer wg.Done()
-			results[idx] = f.fetchOne(ctx, ep)
-		}(i, ep)
+			results[i] = f.fetchOne(ctx, ep)
+		}()
 	}
 	wg.Wait()
 	return results

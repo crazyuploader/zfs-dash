@@ -1,6 +1,7 @@
 package config
 
 import (
+	"cmp"
 	"fmt"
 	"time"
 
@@ -23,11 +24,8 @@ type Config struct {
 // Load reads viper state into a validated Config.
 func Load() (*Config, error) {
 	cfg := &Config{
-		Addr:    viper.GetString("addr"),
+		Addr:    cmp.Or(viper.GetString("addr"), ":8080"),
 		Refresh: time.Duration(viper.GetInt("refresh")) * time.Second,
-	}
-	if cfg.Addr == "" {
-		cfg.Addr = ":8080"
 	}
 	if cfg.Refresh <= 0 {
 		cfg.Refresh = 30 * time.Second
