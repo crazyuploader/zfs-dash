@@ -1,75 +1,37 @@
 # zfs-dash
 
-Minimal, real-time ZFS pool dashboard. Pulls metrics from one or more
-[zfs_exporter](https://github.com/pdf/zfs_exporter) Prometheus endpoints and
-renders a beautiful dashboard in your browser.
+Minimal dashboard for ZFS pool metrics from `pdf/zfs_exporter`.
 
-## Quick Start
+## Run
 
 ```bash
-# Install dependencies
-go mod tidy
-
-# Run with a config file
-cp zfs-dash.yaml.example zfs-dash.yaml  # edit your endpoints
-go run . serve
-
-# Or pass endpoints directly
-go run . serve \
-  --endpoints http://proxmox-1:9134/metrics \
-  --endpoints http://nas-1:9134/metrics \
-  --addr :8080 \
-  --refresh 15
-
-# Build a static binary
-go build -o zfs-dash .
-./zfs-dash serve
+cp config.yaml.example config.yaml
+go run . serve --config config.yaml
 ```
 
-Open http://localhost:8080
+Open `http://localhost:8080`.
 
-## Configuration
-
-Config file: `./zfs-dash.yaml` (or `~/.config/zfs-dash/zfs-dash.yaml`)
+## Config
 
 ```yaml
 addr: ":8080"
 refresh: 30
 
 endpoints:
-  - url: "http://host:9134/metrics"
-    label: "my-server"
+  - url: "http://host1:9134/metrics"
+    label: "node-1"
 ```
 
-All config keys are also available as:
+## Docker
 
-- Flags: `--addr`, `--refresh`, `--endpoints`
-- Env vars: `ZFSDASH_ADDR`, `ZFSDASH_REFRESH`, `ZFSDASH_ENDPOINTS`
+```bash
+docker compose up -d
+```
+
+Edit `config.yaml.example` before starting the stack.
 
 ## API
 
-| Route              | Description                   |
-| ------------------ | ----------------------------- |
-| `GET /`            | Dashboard HTML (SSR)          |
-| `GET /api/metrics` | Raw JSON of all fetched pools |
-
-## Directory Structure
-
-```
-zfs-dash/
-├── main.go
-├── go.mod
-├── zfs-dash.yaml          ← config
-├── cmd/
-│   ├── root.go            ← cobra root + viper binding
-│   └── serve.go           ← serve sub-command
-├── internal/
-│   ├── config/config.go   ← Config struct + Load()
-│   ├── parser/parser.go   ← Prometheus text-format parser
-│   ├── fetcher/fetcher.go ← concurrent HTTP fetcher
-│   ├── model/model.go     ← domain types + ExtractPools()
-│   └── server/server.go   ← Fiber v3 routes + template rendering
-└── templates/
-    ├── templates.go        ← re-exports dashboardHTML
-    └── dashboard_html.go   ← full HTML template string
-```
+- `GET /`
+- `GET /api/metrics`
+- `GET /health`

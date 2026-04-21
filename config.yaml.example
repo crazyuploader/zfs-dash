@@ -1,0 +1,8 @@
+addr: ":8080"
+refresh: 30
+
+endpoints:
+  - url: "http://host1:9134/metrics"
+    label: "node-1"
+  - url: "http://host2:9134/metrics"
+    label: "node-2"

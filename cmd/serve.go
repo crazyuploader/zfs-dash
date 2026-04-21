@@ -21,7 +21,7 @@ var serveCmd = &cobra.Command{
 			return fmt.Errorf("config: %w", err)
 		}
 		if len(cfg.Endpoints) == 0 {
-			return fmt.Errorf("no endpoints configured; use --endpoints or zfs-dash.yaml")
+			return fmt.Errorf("no endpoints configured; use --endpoints or config.yaml")
 		}
 		return server.Start(cfg)
 	},

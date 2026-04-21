@@ -12,10 +12,11 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-w -s
 
 FROM alpine:3.23
 
-RUN apk --no-cache add ca-certificates tzdata
+RUN apk --no-cache add ca-certificates tzdata wget
 
 COPY --from=builder /app/zfs-dash /zfs-dash
 
 EXPOSE 8080
 
 ENTRYPOINT ["/zfs-dash"]
+CMD ["serve"]
