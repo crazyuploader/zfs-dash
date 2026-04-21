@@ -16,6 +16,7 @@ import (
 )
 
 const fetchTimeout = 10 * time.Second
+const maxResponseBytes = 10 << 20
 
 // Fetcher retrieves metrics from configured endpoints.
 type Fetcher struct {
@@ -67,9 +68,13 @@ func (f *Fetcher) fetchOne(ctx context.Context, ep config.Endpoint) model.NodeDa
 		nd.Error = fmt.Sprintf("HTTP %d", resp.StatusCode)
 		return nd
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
 	if err != nil {
 		nd.Error = fmt.Sprintf("read: %v", err)
+		return nd
+	}
+	if len(body) > maxResponseBytes {
+		nd.Error = fmt.Sprintf("response too large: limit %d bytes", maxResponseBytes)
 		return nd
 	}
 	samples, err := parser.Parse(bytes.NewReader(body))

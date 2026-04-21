@@ -15,13 +15,14 @@ import (
 type PoolHealth string
 
 const (
-	HealthOnline   PoolHealth = "ONLINE"
-	HealthDegraded PoolHealth = "DEGRADED"
-	HealthFaulted  PoolHealth = "FAULTED"
-	HealthOffline  PoolHealth = "OFFLINE"
-	HealthRemoved  PoolHealth = "REMOVED"
-	HealthUnavail  PoolHealth = "UNAVAIL"
-	HealthUnknown  PoolHealth = "UNKNOWN"
+	HealthOnline    PoolHealth = "ONLINE"
+	HealthDegraded  PoolHealth = "DEGRADED"
+	HealthFaulted   PoolHealth = "FAULTED"
+	HealthOffline   PoolHealth = "OFFLINE"
+	HealthUnavail   PoolHealth = "UNAVAIL"
+	HealthRemoved   PoolHealth = "REMOVED"
+	HealthSuspended PoolHealth = "SUSPENDED"
+	HealthUnknown   PoolHealth = "UNKNOWN"
 )
 
 // Pool holds the key metrics for one ZFS pool.
@@ -61,9 +62,11 @@ func healthFromValue(v float64) PoolHealth {
 	case 3:
 		return HealthOffline
 	case 4:
-		return HealthRemoved
-	case 5:
 		return HealthUnavail
+	case 5:
+		return HealthRemoved
+	case 6:
+		return HealthSuspended
 	default:
 		return HealthUnknown
 	}

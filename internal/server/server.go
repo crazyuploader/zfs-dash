@@ -16,6 +16,12 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
+const (
+	httpReadTimeout  = 15 * time.Second
+	httpWriteTimeout = 15 * time.Second
+	httpIdleTimeout  = 60 * time.Second
+)
+
 // templateData is the data passed to the HTML template.
 // All fields are pre-computed so the template stays logic-free.
 type templateData struct {
@@ -39,7 +45,10 @@ func Start(cfg *config.Config) error {
 	}
 
 	app := fiber.New(fiber.Config{
-		AppName: "zfs-dash",
+		AppName:      "zfs-dash",
+		ReadTimeout:  httpReadTimeout,
+		WriteTimeout: httpWriteTimeout,
+		IdleTimeout:  httpIdleTimeout,
 	})
 
 	// JSON API — useful for scripting / alerts.

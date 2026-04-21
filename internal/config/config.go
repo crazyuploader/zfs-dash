@@ -33,17 +33,23 @@ func Load() (*Config, error) {
 
 	// Try structured endpoints block (config file).
 	var eps []Endpoint
-	if err := viper.UnmarshalKey("endpoints", &eps); err == nil && len(eps) > 0 {
-		for i, ep := range eps {
-			if ep.URL == "" {
-				return nil, fmt.Errorf("endpoint[%d] missing url", i)
-			}
-			if ep.Label == "" {
-				eps[i].Label = ep.URL
-			}
+	if viper.IsSet("endpoints") {
+		if err := viper.UnmarshalKey("endpoints", &eps); err != nil {
+			return nil, fmt.Errorf("decode endpoints: %w", err)
 		}
-		cfg.Endpoints = eps
-		return cfg, nil
+
+		if len(eps) > 0 {
+			for i, ep := range eps {
+				if ep.URL == "" {
+					return nil, fmt.Errorf("endpoint[%d] missing url", i)
+				}
+				if ep.Label == "" {
+					eps[i].Label = ep.URL
+				}
+			}
+			cfg.Endpoints = eps
+			return cfg, nil
+		}
 	}
 
 	// Fall back to flat string slice (--endpoints flag / env).

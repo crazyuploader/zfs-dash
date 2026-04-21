@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -9,6 +10,7 @@ import (
 )
 
 var cfgFile string
+var initConfigErr error
 
 var rootCmd = &cobra.Command{
 	Use:           "zfs-dash",
@@ -51,5 +53,11 @@ func initConfig() {
 	viper.AutomaticEnv()
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Fprintln(os.Stderr, "Using config:", viper.ConfigFileUsed())
+	} else if cfgFile != "" || !errors.As(err, new(viper.ConfigFileNotFoundError)) {
+		initConfigErr = err
 	}
+}
+
+func configInitError() error {
+	return initConfigErr
 }
