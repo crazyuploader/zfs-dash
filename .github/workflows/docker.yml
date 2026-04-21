@@ -130,7 +130,7 @@ jobs:
       - name: Create and push manifest
         working-directory: ${{ runner.temp }}/digests
         run: |
-          docker buildx imagetools create $(foreach tag in ${{ steps.meta.outputs.tags }}; do echo "-t $tag "; done) \
+          docker buildx imagetools create $(for tag in ${{ steps.meta.outputs.tags }}; do echo "-t $tag "; done) \
             $(printf '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:%s ' *)
 
       - name: Inspect manifest
