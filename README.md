@@ -1,6 +1,6 @@
 # zfs-dash
 
-Minimal dashboard for ZFS pool metrics from `pdf/zfs_exporter`.
+Minimal dashboard for ZFS pool metrics from [pdf/zfs_exporter](https://github.com/pdf/zfs_exporter).
 
 ## Run
 
