@@ -405,6 +405,49 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 }
 .chip.hot { background: var(--error-dim); color: var(--error); }
 
+/* ── Node Failures ────────────────────────────────────── */
+.failures-section { margin-bottom: var(--space-6); }
+.failures-toggle {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-3); padding: var(--space-4) var(--space-5);
+  background: var(--error-dim); border: 1px solid color-mix(in oklab, var(--error) 30%, transparent);
+  border-radius: var(--radius-xl); cursor: pointer;
+}
+.failures-toggle:hover { border-color: color-mix(in oklab, var(--error) 55%, transparent); }
+.failures-toggle-left { display: flex; align-items: center; gap: var(--space-3); }
+.failures-toggle-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--error); flex-shrink: 0;
+  animation: blink-dot 1.4s ease-in-out infinite;
+}
+@keyframes blink-dot { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.failures-toggle-title { font-size: var(--text-sm); font-weight: 600; color: var(--error); }
+.failures-toggle-count { font-size: var(--text-sm); color: var(--error); font-family: var(--font-mono); }
+.failures-toggle-arrow {
+  color: var(--error); transition: transform 200ms ease; flex-shrink: 0;
+}
+.failures-toggle-arrow.open { transform: rotate(180deg); }
+.failures-body {
+  margin-top: var(--space-2); display: grid; gap: var(--space-2);
+}
+.failures-body.collapsed { display: none; }
+.failure-item {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: var(--space-3); align-items: center;
+  padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg);
+  background: color-mix(in oklab, var(--error-dim) 50%, transparent);
+  border: 1px solid color-mix(in oklab, var(--error) 18%, transparent);
+}
+.failure-label { font-size: var(--text-sm); font-weight: 600; }
+.failure-location { font-size: var(--text-xs); color: var(--text-muted); }
+.failure-chip {
+  padding: 2px 8px; border-radius: var(--radius-full);
+  background: color-mix(in oklab, var(--error) 15%, transparent);
+  border: 1px solid color-mix(in oklab, var(--error) 30%, transparent);
+  color: var(--error); font-size: 0.68rem; font-weight: 700;
+  letter-spacing: 0.04em; text-transform: uppercase;
+}
+.failure-time { font-size: var(--text-xs); color: var(--text-faint); font-family: var(--font-mono); }
+
 /* ── Refresh Progress Bar ────────────────────────────── */
 #rbar {
   position: fixed; bottom: 0; left: 0; height: 2px;
@@ -513,6 +556,33 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
       <div class="kpi-hint">FAULTED/UNAVAIL</div>
     </div>
   </div>
+
+  {{if gt .UnreachableNodes 0}}
+  <div class="failures-section">
+    <div class="failures-toggle" id="failures-toggle" role="button" aria-expanded="false" aria-controls="failures-body">
+      <div class="failures-toggle-left">
+        <div class="failures-toggle-dot" aria-hidden="true"></div>
+        <div class="failures-toggle-title">Node Failures</div>
+        <div class="failures-toggle-count">{{.UnreachableNodes}}</div>
+      </div>
+      <svg class="failures-toggle-arrow" id="failures-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+    </div>
+    <div class="failures-body collapsed" id="failures-body">
+      {{range $node := .Nodes}}
+      {{if $node.Error}}
+      <div class="failure-item">
+        <div>
+          <div class="failure-label">{{$node.Label}}</div>
+          {{if $node.Location}}<div class="failure-location">{{$node.Location}}</div>{{end}}
+        </div>
+        <div class="failure-chip">unreachable</div>
+        <div class="failure-time">{{fmtNodeTime $node.FetchedAt}}</div>
+      </div>
+      {{end}}
+      {{end}}
+    </div>
+  </div>
+  {{end}}
 
   <!-- Per-node sections -->
   {{range $ni, $node := .Nodes}}
@@ -802,6 +872,19 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
     if (event.key === 'Escape') closeModal();
   });
 
+  /* ── Failures toggle ─────────────────────────────── */
+  const ftoggle = document.getElementById('failures-toggle');
+  const fbody = document.getElementById('failures-body');
+  const farrow = document.getElementById('failures-arrow');
+  if (ftoggle && fbody) {
+    ftoggle.addEventListener('click', function () {
+      const isOpen = ftoggle.getAttribute('aria-expanded') === 'true';
+      ftoggle.setAttribute('aria-expanded', String(!isOpen));
+      fbody.classList.toggle('collapsed', isOpen);
+      if (farrow) farrow.classList.toggle('open', !isOpen);
+    });
+  }
+
   /* ── Animate usage bars ───────────────────────────── */
   document.querySelectorAll('.bar-fill[data-width]').forEach(function (el) {
     const target = el.getAttribute('data-width') + '%';
@@ -832,7 +915,7 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   const tsEl = document.getElementById('ts');
   if (tsEl) {
     tsEl.textContent = new Date().toLocaleTimeString([], {
-      hour: '2-digit', minute: '2-digit', second: '2-digit'
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
     });
   }
 })();
