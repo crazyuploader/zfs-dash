@@ -63,7 +63,7 @@ func (f *Fetcher) fetchOne(ctx context.Context, ep config.Endpoint) model.NodeDa
 		nd.Error = fmt.Sprintf("unreachable: %v", err)
 		return nd
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		nd.Error = fmt.Sprintf("HTTP %d", resp.StatusCode)
