@@ -62,6 +62,10 @@ func Start(cfg *config.Config) error {
 		return tmpl.Execute(c.Response().BodyWriter(), data)
 	})
 
+	app.Get("/health", func(c fiber.Ctx) error {
+		return c.SendString("OK")
+	})
+
 	fmt.Printf("→  zfs-dash  http://localhost%s\n", cfg.Addr)
 	return app.Listen(cfg.Addr)
 }
