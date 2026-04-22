@@ -409,7 +409,8 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 .alert-node-err-head {
   display: flex; align-items: center; gap: var(--space-2);
 }
-.alert-node-err-label { font-size: var(--text-sm); font-weight: 600; color: var(--error); }
+.alert-node-err-head > svg { margin-top: 2px; }
+.alert-node-err-label { font-size: var(--text-sm); font-weight: 600; color: var(--error); line-height: 1; }
 .alert-node-err-loc {
   font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
   padding: 2px 7px; border-radius: var(--radius-full);
@@ -615,10 +616,11 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 .bar-fill.warn  { background: var(--warning); }
 .bar-fill.bad   { background: var(--error); }
 .usage-sizes {
-  display: flex; justify-content: space-between;
+  display: flex; justify-content: space-between; flex-wrap: wrap;
   font-size: var(--text-xs); font-family: var(--font-mono);
-  color: var(--text-faint); gap: var(--space-2);
+  color: var(--text-faint); gap: 4px var(--space-2);
 }
+.usage-sizes span { white-space: nowrap; }
 .usage-sizes b { color: var(--text-muted); font-weight: 500; }
 
 /* ── Stats 2×2 ───────────────────────────────────────── */
@@ -658,11 +660,58 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   opacity: 0.55; pointer-events: none;
 }
 
+/* ── Entrance Animations ─────────────────────────────── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+.animate-in {
+  animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  opacity: 0;
+}
+.animate-in-delayed-1 { animation-delay: 0.05s; }
+.animate-in-delayed-2 { animation-delay: 0.1s; }
+.animate-in-delayed-3 { animation-delay: 0.15s; }
+.animate-in-delayed-4 { animation-delay: 0.2s; }
+.animate-in-delayed-5 { animation-delay: 0.25s; }
+.animate-in-delayed-6 { animation-delay: 0.3s; }
+
+.animate-in-modal {
+  animation: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  opacity: 0;
+}
+
+/* Focus trap styles */
+.pool-detail-modal:focus { outline: none; }
+.pool-detail-modal:focus-visible {
+  outline: 2px solid var(--primary); outline-offset: 2px;
+}
+
+/* Enhanced focus states */
+button:focus-visible,
+.pool-card:focus-visible,
+.icon-btn:focus-visible,
+.pool-detail-close:focus-visible {
+  outline: 2px solid var(--primary); outline-offset: 2px;
+}
+.pool-card[data-has-datasets="true"]:focus-visible {
+  outline-offset: 3px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+  .animate-in, .animate-in-modal { animation: none; opacity: 1; }
 }
 </style>
 </head>
@@ -705,13 +754,13 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 <main class="main">
 
   <!-- Page header -->
-  <div class="page-header">
+  <div class="page-header animate-in">
     <h1 class="page-title">Pool Overview</h1>
     <p class="page-sub">{{.TotalNodes}} node{{if gt .TotalNodes 1}}s{{end}} &middot; {{.TotalPools}} pool{{if gt .TotalPools 1}}s{{end}} &middot; {{.UnreachableNodes}} unreachable &middot; fetched {{.FetchedAt}}</p>
   </div>
 
   <!-- KPI summary -->
-  <div class="kpi-row" role="region" aria-label="Fleet summary">
+  <div class="kpi-row animate-in animate-in-delayed-1" role="region" aria-label="Fleet summary">
     <div class="kpi">
       <div class="kpi-label">Nodes</div>
       <div class="kpi-val neutral">{{.TotalNodes}}</div>
@@ -746,7 +795,7 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 
   <!-- ══ Unreachable Nodes ══ -->
   {{if gt .UnreachableNodes 0}}
-  <div class="alert-section faulted" id="section-unreachable">
+  <div class="alert-section faulted animate-in animate-in-delayed-2" id="section-unreachable">
     <button class="alert-toggle" id="toggle-unreachable"
             aria-expanded="false" aria-controls="body-unreachable">
       <div class="alert-toggle-left">
@@ -794,7 +843,7 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 
   <!-- ══ Degraded Pools ══ -->
   {{if gt .DegradedPools 0}}
-  <div class="alert-section degraded" id="section-degraded">
+  <div class="alert-section degraded animate-in animate-in-delayed-2" id="section-degraded">
     <button class="alert-toggle" id="toggle-degraded"
             aria-expanded="false" aria-controls="body-degraded">
       <div class="alert-toggle-left">
@@ -831,7 +880,7 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 
   <!-- ══ Faulted / Unavailable Pools ══ -->
   {{if gt .ErroredPools 0}}
-  <div class="alert-section faulted" id="section-faulted">
+  <div class="alert-section faulted animate-in animate-in-delayed-2" id="section-faulted">
     <button class="alert-toggle" id="toggle-faulted"
             aria-expanded="false" aria-controls="body-faulted">
       <div class="alert-toggle-left">
@@ -868,7 +917,7 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   <!-- ══ Per-node healthy pools ══ -->
   {{range $ni, $node := .Nodes}}
   {{if not $node.Error}}
-  <section class="node" aria-label="Node {{$node.Label}}">
+  <section class="node animate-in {{if eq $ni 0}}animate-in-delayed-3{{else if eq $ni 1}}animate-in-delayed-4{{else if eq $ni 2}}animate-in-delayed-5{{else}}animate-in-delayed-6{{end}}" aria-label="Node {{$node.Label}}">
 
     <div class="node-head">
       <div class="node-icon-wrap" aria-hidden="true">
@@ -1011,6 +1060,7 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   'use strict';
 
   const nodes = {{safeJS (toJSON .Nodes)}};
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   /* ── Theme toggle ─────────────────────────────────── */
   const html    = document.documentElement;
@@ -1059,12 +1109,16 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
     });
   });
 
-  /* ── Pool detail modal ────────────────────────────── */
+  /* ── Pool detail modal with focus trap ─────────────────── */
   const overlay    = document.getElementById('pool-detail-overlay');
   const closeBtn   = document.getElementById('pool-detail-close');
   const detailTitle = document.getElementById('pool-detail-title');
   const detailSub  = document.getElementById('pool-detail-sub');
   const detailBody = document.getElementById('pool-detail-body');
+  const modal     = overlay ? overlay.querySelector('.pool-detail-modal') : null;
+  const focusableSelector = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+  let lastFocused = null;
+  let focusBeforeModal = null;
 
   function fmtBytes(value) {
     const units = ['B','KB','MB','GB','TB','PB','EB'];
@@ -1110,6 +1164,19 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
     overlay.hidden = true;
     overlay.classList.remove('open');
     if (detailBody) detailBody.innerHTML = '';
+    if (focusBeforeModal) { focusBeforeModal.focus(); focusBeforeModal = null; }
+    document.removeEventListener('keydown', trapKey);
+  }
+
+  function trapKey(e) {
+    if (e.key !== 'Tab' || !modal) return;
+    const foci = modal.querySelectorAll(focusableSelector);
+    const first = foci[0], last = foci[foci.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault(); last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault(); first.focus();
+    }
   }
 
   function openPoolDetail(ni, pi) {
@@ -1117,6 +1184,7 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
     const pool = node && node.pools ? node.pools[pi] : null;
     if (!pool || !overlay) return;
 
+    focusBeforeModal = document.activeElement;
     detailTitle.textContent = pool.name + ' datasets';
     detailSub.textContent = node.label
       + (node.location ? ' · ' + node.location : '')
@@ -1128,7 +1196,13 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 
     overlay.hidden = false;
     overlay.classList.add('open');
+    document.addEventListener('keydown', trapKey);
+    if (modal) {
+      const firstFocus = modal.querySelector(focusableSelector);
+      if (firstFocus) firstFocus.focus();
+    }
   }
+
 
   document.querySelectorAll('.pool-card[data-has-datasets="true"]').forEach(function (card) {
     card.addEventListener('click', function () {
@@ -1141,12 +1215,33 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeModal(); });
 
   /* ── Animate usage bars ───────────────────────────── */
-  document.querySelectorAll('.bar-fill[data-width]').forEach(function (el) {
-    const target = el.getAttribute('data-width') + '%';
-    requestAnimationFrame(function () {
-      requestAnimationFrame(function () { el.style.width = target; });
+  if (!prefersReducedMotion) {
+    document.querySelectorAll('.bar-fill[data-width]').forEach(function (el) {
+      const target = el.getAttribute('data-width') + '%';
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () { el.style.width = target; });
+      });
     });
-  });
+  } else {
+    document.querySelectorAll('.bar-fill[data-width]').forEach(function (el) {
+      el.style.width = el.getAttribute('data-width') + '%';
+    });
+  }
+
+  /* ── Animate entrance ─────────────────────────────── */
+  if (!prefersReducedMotion) {
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        document.querySelectorAll('.animate-in, .animate-in-modal').forEach(function (el) {
+          el.style.opacity = '';
+        });
+      });
+    });
+  } else {
+    document.querySelectorAll('.animate-in, .animate-in-modal').forEach(function (el) {
+      el.style.opacity = '';
+    });
+  }
 
   /* ── Auto-refresh progress bar & reload ───────────── */
   const REFRESH_MS = {{.RefreshSecs}} * 1000;
