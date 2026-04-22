@@ -8,12 +8,12 @@ const dashboardHTML = `<!DOCTYPE html>
 <title>ZFS Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 /* ── Design Tokens ─────────────────────────────────── */
 :root {
-  --font-body: 'Geist', 'Inter', system-ui, sans-serif;
-  --font-mono: 'Geist Mono', 'JetBrains Mono', monospace;
+  --font-body: 'DM Sans', system-ui, sans-serif;
+  --font-mono: 'DM Mono', 'JetBrains Mono', monospace;
 
   --text-xs:   clamp(0.72rem,  0.68rem + 0.2vw, 0.8rem);
   --text-sm:   clamp(0.82rem,  0.78rem + 0.2vw, 0.9rem);
@@ -101,6 +101,10 @@ html {
 body {
   min-height: 100dvh;
   background: var(--bg);
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-blend-mode: overlay;
+  background-size: 128px;
+  opacity: 1;
   color: var(--text);
   font-family: var(--font-body);
   font-size: var(--text-sm);
@@ -662,8 +666,8 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 
 /* ── Entrance Animations ─────────────────────────────── */
 @keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 @keyframes fadeIn {
   from { opacity: 0; }
@@ -674,15 +678,16 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   to { opacity: 1; transform: scale(1); }
 }
 .animate-in {
-  animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: fadeInUp 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   opacity: 0;
+  transform-origin: center top;
 }
-.animate-in-delayed-1 { animation-delay: 0.05s; }
-.animate-in-delayed-2 { animation-delay: 0.1s; }
-.animate-in-delayed-3 { animation-delay: 0.15s; }
-.animate-in-delayed-4 { animation-delay: 0.2s; }
-.animate-in-delayed-5 { animation-delay: 0.25s; }
-.animate-in-delayed-6 { animation-delay: 0.3s; }
+.animate-in-delayed-1 { animation-delay: 0.08s; }
+.animate-in-delayed-2 { animation-delay: 0.16s; }
+.animate-in-delayed-3 { animation-delay: 0.24s; }
+.animate-in-delayed-4 { animation-delay: 0.32s; }
+.animate-in-delayed-5 { animation-delay: 0.4s; }
+.animate-in-delayed-6 { animation-delay: 0.48s; }
 
 .animate-in-modal {
   animation: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
