@@ -6,7 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"os"
+	"os/signal"
 	"strings"
+	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/crazyuploader/zfs-dash/internal/config"
@@ -39,18 +43,41 @@ type templateData struct {
 
 // Start registers routes and begins listening.
 func Start(cfg *config.Config) error {
+	var cfgPtr atomic.Pointer[config.Config]
+	cfgPtr.Store(cfg)
+
 	if cfg.Debug {
 		fmt.Printf("DEBUG: starting server in debug mode\n")
 		fmt.Printf("DEBUG: config: %+v\n", cfg)
 	}
 
-	f := fetcher.New(cfg.Endpoints, cfg.Debug)
+	f := fetcher.New(cfg.Endpoints, cfg.Debug, cfg.CacheTTL)
+
+	// Hot-reload config on SIGHUP
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGHUP)
+	go func() {
+		for range sigs {
+			fmt.Println("→  SIGHUP received, reloading config...")
+			newCfg, err := config.Load()
+			if err != nil {
+				fmt.Printf("ERROR: config reload failed: %v\n", err)
+				continue
+			}
+			f.SetEndpoints(newCfg.Endpoints)
+			f.Debug = newCfg.Debug
+			cfgPtr.Store(newCfg)
+			fmt.Println("→  config reloaded successfully")
+		}
+	}()
 
 	tmpl, err := template.New("dashboard").Funcs(funcMap()).Parse(templates.Dashboard)
 	if err != nil {
 		return fmt.Errorf("template parse: %w", err)
 	}
 
+	// Read initial config for Fiber setup.
+	// Note: Fiber config itself isn't reloaded here.
 	app := fiber.New(fiber.Config{
 		AppName:      "zfs-dash",
 		ReadTimeout:  httpReadTimeout,
@@ -71,26 +98,31 @@ func Start(cfg *config.Config) error {
 	app.Get("/api/metrics", func(c fiber.Ctx) error {
 		ctx, cancel := context.WithTimeout(c.Context(), 15*time.Second)
 		defer cancel()
-		nodes := f.FetchAll(ctx)
+		nodes, isCached := f.FetchAll(ctx)
+		setCacheHeaders(c, f, isCached)
 		return c.JSON(nodes)
 	})
 
 	app.Get("/api/health/:label", func(c fiber.Ctx) error {
-		return serveHealthCheck(c, f, c.Params("label"), "", cfg.Debug)
+		curCfg := cfgPtr.Load()
+		return serveHealthCheck(c, f, c.Params("label"), "", curCfg.Debug)
 	})
 
 	app.Get("/api/health/:label/:pool", func(c fiber.Ctx) error {
-		return serveHealthCheck(c, f, c.Params("label"), c.Params("pool"), cfg.Debug)
+		curCfg := cfgPtr.Load()
+		return serveHealthCheck(c, f, c.Params("label"), c.Params("pool"), curCfg.Debug)
 	})
 
 	// Dashboard — SSR HTML page.
 	app.Get("/", func(c fiber.Ctx) error {
+		curCfg := cfgPtr.Load()
 		ctx, cancel := context.WithTimeout(c.Context(), 15*time.Second)
 		defer cancel()
 
-		nodes := f.FetchAll(ctx)
-		data := buildTemplateData(nodes, cfg)
+		nodes, isCached := f.FetchAll(ctx)
+		data := buildTemplateData(nodes, curCfg)
 
+		setCacheHeaders(c, f, isCached)
 		c.Set("Content-Type", "text/html; charset=utf-8")
 		return tmpl.Execute(c.Response().BodyWriter(), data)
 	})
@@ -137,7 +169,9 @@ func serveHealthCheck(c fiber.Ctx, f *fetcher.Fetcher, label, poolName string, d
 	ctx, cancel := context.WithTimeout(c.Context(), 15*time.Second)
 	defer cancel()
 
-	nodes := f.FetchAll(ctx)
+	nodes, isCached := f.FetchAll(ctx)
+	setCacheHeaders(c, f, isCached)
+
 	node, err := findNodeByLabel(nodes, label)
 	if err != nil {
 		if debug {
@@ -300,5 +334,17 @@ func funcMap() template.FuncMap {
 			}
 			return dict, nil
 		},
+	}
+}
+
+func setCacheHeaders(c fiber.Ctx, f *fetcher.Fetcher, isCached bool) {
+	if isCached {
+		c.Set("X-Cache", "HIT")
+		expiresAt, _ := f.CacheInfo()
+		if time.Now().Before(expiresAt) {
+			c.Set("X-Cache-Expires-In", time.Until(expiresAt).Round(time.Second).String())
+		}
+	} else {
+		c.Set("X-Cache", "MISS")
 	}
 }

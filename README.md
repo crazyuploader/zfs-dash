@@ -25,6 +25,7 @@ Open `http://localhost:8054`.
 ```yaml
 addr: ":8054"
 refresh: 300
+cache_ttl: 30 # Cache fetched metrics for 30 seconds to reduce load
 debug: false
 trusted_proxies: [] # List of proxy IPs or CIDR ranges (e.g., ["127.0.0.1", "100.64.0.0/10"])
 
@@ -32,6 +33,14 @@ endpoints:
   - url: "http://host1:9134/metrics"
     label: "node-1"
     location: "Singapore"
+```
+
+## Hot Reload
+
+You can reload the configuration (endpoints, debug mode, and cache settings) without restarting the server by sending a `SIGHUP` signal:
+
+```bash
+kill -HUP $(pgrep zfs-dash)
 ```
 
 ## Docker

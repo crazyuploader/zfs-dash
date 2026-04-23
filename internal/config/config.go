@@ -20,6 +20,7 @@ type Config struct {
 	Endpoints      []Endpoint
 	Addr           string
 	Refresh        time.Duration
+	CacheTTL       time.Duration
 	Debug          bool
 	TrustedProxies []string
 }
@@ -29,6 +30,7 @@ func Load() (*Config, error) {
 	cfg := &Config{
 		Addr:           cmp.Or(viper.GetString("addr"), ":8054"),
 		Refresh:        time.Duration(viper.GetInt("refresh")) * time.Second,
+		CacheTTL:       time.Duration(cmp.Or(viper.GetInt("cache_ttl"), 30)) * time.Second,
 		Debug:          viper.GetBool("debug"),
 		TrustedProxies: viper.GetStringSlice("trusted_proxies"),
 	}
