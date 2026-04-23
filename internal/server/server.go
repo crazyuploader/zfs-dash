@@ -456,6 +456,49 @@ func funcMap() template.FuncMap {
 			b, _ := json.Marshal(v)
 			return string(b)
 		},
+		"fmtSpeed": func(bps float64) string {
+			switch {
+			case bps >= 1e9:
+				return fmt.Sprintf("%.0f Gb/s", bps/1e9)
+			case bps >= 1e6:
+				return fmt.Sprintf("%.0f Mb/s", bps/1e6)
+			default:
+				return fmt.Sprintf("%.0f b/s", bps)
+			}
+		},
+		"exitStatusDesc": func(code float64) string {
+			n := int(code)
+			if n == 0 {
+				return ""
+			}
+			var parts []string
+			if n&(1<<1) != 0 {
+				parts = append(parts, "device failure")
+			}
+			if n&(1<<2) != 0 {
+				parts = append(parts, "disk failing")
+			}
+			if n&(1<<3) != 0 {
+				parts = append(parts, "prefail attributes")
+			}
+			if n&(1<<4) != 0 {
+				parts = append(parts, "prev failed attributes")
+			}
+			if n&(1<<5) != 0 {
+				parts = append(parts, "error log has errors")
+			}
+			if n&(1<<6) != 0 {
+				parts = append(parts, "self-test errors")
+			}
+			if len(parts) == 0 {
+				return fmt.Sprintf("code %d", n)
+			}
+			return strings.Join(parts, ", ")
+		},
+		"diskHasIssues": func(d model.DiskInfo) bool {
+			return d.PendingSectors > 0 || d.OfflineUncorrectable > 0 || d.ReportedUncorrect > 0 ||
+				(d.HasExitStatus && d.ExitStatus > 0)
+		},
 		"tempBarPct": func(temp, maxTemp float64) string {
 			if maxTemp <= 0 {
 				maxTemp = 70

@@ -79,11 +79,22 @@ type DiskInfo struct {
 	PercentageUsed  float64 `json:"percentage_used,omitempty"` // SSD/NVMe wear 0–100
 	AvailableSpare  float64 `json:"available_spare,omitempty"` // NVMe spare %
 	SpareThreshold  float64 `json:"spare_threshold,omitempty"` // NVMe spare threshold %
-	MediaErrors     float64 `json:"media_errors,omitempty"`    // unrecovered integrity errors
-	CriticalWarning float64 `json:"critical_warning,omitempty"`
-	BytesRead       float64 `json:"bytes_read,omitempty"`
-	BytesWritten    float64 `json:"bytes_written,omitempty"`
-	ErrorLogCount   float64 `json:"error_log_count,omitempty"`
+	MediaErrors      float64 `json:"media_errors,omitempty"`     // unrecovered integrity errors
+	HasMediaErrors   bool    `json:"has_media_errors,omitempty"` // true when metric was present (even if 0)
+	CriticalWarning  float64 `json:"critical_warning,omitempty"`
+	BytesRead        float64 `json:"bytes_read,omitempty"`
+	BytesWritten     float64 `json:"bytes_written,omitempty"`
+	ErrorLogCount        float64 `json:"error_log_count,omitempty"`
+	HasPercentUsed       bool    `json:"has_percent_used,omitempty"`  // true when metric was present (even if 0)
+	ReallocatedSectors   float64 `json:"reallocated_sectors,omitempty"`
+	PendingSectors       float64 `json:"pending_sectors,omitempty"`
+	OfflineUncorrectable float64 `json:"offline_uncorrectable,omitempty"`
+	ReportedUncorrect    float64 `json:"reported_uncorrect,omitempty"`
+	UDMACRCErrors        float64 `json:"udma_crc_errors,omitempty"`
+	LoadCycleCount       float64 `json:"load_cycle_count,omitempty"`
+	InterfaceSpeed       float64 `json:"interface_speed,omitempty"` // bits/sec
+	ExitStatus           float64 `json:"exit_status,omitempty"`
+	HasExitStatus        bool    `json:"has_exit_status,omitempty"`
 }
 
 // ExporterInfo holds metadata from zfs_exporter_build_info.
@@ -203,13 +214,17 @@ func ExtractDisks(samples []parser.Sample) []DiskInfo {
 		case "smartctl_device_rotation_rate":
 			ensure(device).RotationRate = int(math.Round(s.Value))
 		case "smartctl_device_percentage_used":
-			ensure(device).PercentageUsed = s.Value
+			d := ensure(device)
+			d.PercentageUsed = s.Value
+			d.HasPercentUsed = true
 		case "smartctl_device_available_spare":
 			ensure(device).AvailableSpare = s.Value
 		case "smartctl_device_available_spare_threshold":
 			ensure(device).SpareThreshold = s.Value
 		case "smartctl_device_media_errors":
-			ensure(device).MediaErrors = s.Value
+			d := ensure(device)
+			d.MediaErrors = s.Value
+			d.HasMediaErrors = true
 		case "smartctl_device_critical_warning":
 			ensure(device).CriticalWarning = s.Value
 		case "smartctl_device_bytes_read":
@@ -219,6 +234,39 @@ func ExtractDisks(samples []parser.Sample) []DiskInfo {
 		case "smartctl_device_error_log_count":
 			if s.Labels["error_log_type"] == "summary" {
 				ensure(device).ErrorLogCount = s.Value
+			}
+		case "smartctl_device_num_err_log_entries":
+			// NVMe error log entries (separate metric from HDD error_log_count)
+			d := ensure(device)
+			if d.ErrorLogCount == 0 {
+				d.ErrorLogCount = s.Value
+			}
+		case "smartctl_device_interface_speed":
+			if s.Labels["speed_type"] == "current" {
+				ensure(device).InterfaceSpeed = s.Value
+			}
+		case "smartctl_device_smartctl_exit_status":
+			d := ensure(device)
+			d.ExitStatus = s.Value
+			d.HasExitStatus = true
+		case "smartctl_device_attribute":
+			if s.Labels["attribute_value_type"] != "raw" {
+				continue
+			}
+			d := ensure(device)
+			switch s.Labels["attribute_name"] {
+			case "Reallocated_Sector_Ct":
+				d.ReallocatedSectors = s.Value
+			case "Current_Pending_Sector":
+				d.PendingSectors = s.Value
+			case "Offline_Uncorrectable":
+				d.OfflineUncorrectable = s.Value
+			case "Reported_Uncorrect":
+				d.ReportedUncorrect = s.Value
+			case "UDMA_CRC_Error_Count":
+				d.UDMACRCErrors = s.Value
+			case "Load_Cycle_Count":
+				d.LoadCycleCount = s.Value
 			}
 		}
 	}

@@ -421,6 +421,12 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   border-radius: var(--radius-sm); white-space: nowrap;
   background: var(--error-dim); color: var(--error);
 }
+/* Drive issues warning badge */
+.disk-issues-badge {
+  font-size: 0.58rem; font-weight: 700; padding: 1px 5px;
+  border-radius: var(--radius-sm); white-space: nowrap;
+  background: var(--error-dim); color: var(--error);
+}
 
 /* ── Error Banner ────────────────────────────────────── */
 .node-err {
@@ -1143,8 +1149,9 @@ button:focus-visible,
           {{if gt0 $disk.Temperature}}<span class="disk-temp {{tempClass $disk.Temperature}}">{{printf "%.0f" $disk.Temperature}}°C</span>{{end}}
           <span class="disk-smart {{if $disk.SmartPassed}}pass{{else}}fail{{end}}">{{if $disk.SmartPassed}}PASS{{else}}FAIL{{end}}</span>
           {{if gt0 $disk.PowerOnHours}}<span class="disk-hours">{{fmtHours $disk.PowerOnHours}}</span>{{end}}
-          {{if gt0 $disk.PercentageUsed}}<span class="disk-wear-badge {{if ge $disk.PercentageUsed 90.0}}bad{{else if ge $disk.PercentageUsed 70.0}}warn{{else}}good{{end}}">{{printf "%.0f" $disk.PercentageUsed}}% used</span>{{end}}
-          {{if gt0 $disk.MediaErrors}}<span class="disk-merr-badge">{{printf "%.0f" $disk.MediaErrors}} err</span>{{end}}
+          {{if $disk.HasPercentUsed}}<span class="disk-wear-badge {{if ge $disk.PercentageUsed 90.0}}bad{{else if ge $disk.PercentageUsed 70.0}}warn{{else}}good{{end}}">{{printf "%.0f" $disk.PercentageUsed}}% used</span>{{end}}
+          {{if and $disk.HasMediaErrors (gt0 $disk.MediaErrors)}}<span class="disk-merr-badge">{{printf "%.0f" $disk.MediaErrors}} media err</span>{{end}}
+          {{if diskHasIssues $disk}}<span class="disk-issues-badge">⚠ issues</span>{{end}}
           <span class="disk-expand-hint">▾</span>
         </div>
         <div class="disk-detail" id="disk-detail-{{$ni}}-{{$di}}">
@@ -1191,15 +1198,23 @@ button:focus-visible,
               {{if gt $disk.RotationRate 0}}<span class="disk-info-key">RPM</span><span class="disk-info-val">{{$disk.RotationRate}}</span>{{end}}
               {{if gt0 $disk.PowerOnHours}}<span class="disk-info-key">Power On</span><span class="disk-info-val">{{fmtHours $disk.PowerOnHours}} ({{printf "%.0f" $disk.PowerOnHours}}h)</span>{{end}}
               {{if gt0 $disk.PowerCycles}}<span class="disk-info-key">Power Cycles</span><span class="disk-info-val">{{printf "%.0f" $disk.PowerCycles}}</span>{{end}}
+              {{if gt0 $disk.LoadCycleCount}}<span class="disk-info-key">Load Cycles</span><span class="disk-info-val">{{printf "%.0f" $disk.LoadCycleCount}}</span>{{end}}
+              {{if gt0 $disk.InterfaceSpeed}}<span class="disk-info-key">Interface Speed</span><span class="disk-info-val">{{fmtSpeed $disk.InterfaceSpeed}}</span>{{end}}
               <span class="disk-info-key">SMART</span><span class="disk-smart {{if $disk.SmartPassed}}pass{{else}}fail{{end}}">{{if $disk.SmartPassed}}PASSED{{else}}FAILED{{end}}</span>
+              {{if $disk.HasExitStatus}}
+              <span class="disk-info-key">Exit Status</span>
+              <span class="disk-info-val {{if gt0 $disk.ExitStatus}}bad{{end}}">
+                {{if gt0 $disk.ExitStatus}}{{exitStatusDesc $disk.ExitStatus}}{{else}}OK{{end}}
+              </span>
+              {{end}}
             </div>
           </div>
           <!-- Health (SSD/NVMe) -->
-          {{if or (gt0 $disk.PercentageUsed) (gt0 $disk.AvailableSpare) (gt0 $disk.MediaErrors) (gt0 $disk.BytesWritten) (gt0 $disk.BytesRead)}}
+          {{if or $disk.HasPercentUsed $disk.HasMediaErrors (gt0 $disk.AvailableSpare) (gt0 $disk.BytesWritten) (gt0 $disk.BytesRead) (gt0 $disk.ErrorLogCount) (gt0 $disk.ReallocatedSectors) (gt0 $disk.PendingSectors) (gt0 $disk.OfflineUncorrectable) (gt0 $disk.ReportedUncorrect) (gt0 $disk.UDMACRCErrors)}}
           <div>
             <div class="disk-detail-section-label">Health &amp; Usage</div>
             <div class="disk-info-grid">
-              {{if gt0 $disk.PercentageUsed}}
+              {{if $disk.HasPercentUsed}}
               <span class="disk-info-key">Wear</span>
               <span>
                 <span class="disk-info-val {{if ge $disk.PercentageUsed 90.0}}bad{{else if ge $disk.PercentageUsed 70.0}}warn{{end}}">{{printf "%.0f" $disk.PercentageUsed}}%</span>
@@ -1211,8 +1226,13 @@ button:focus-visible,
               <span class="disk-info-val {{if and (gt0 $disk.SpareThreshold) (lt $disk.AvailableSpare $disk.SpareThreshold)}}bad{{else if le $disk.AvailableSpare 20.0}}warn{{end}}">{{printf "%.0f" $disk.AvailableSpare}}%{{if gt0 $disk.SpareThreshold}} (thr: {{printf "%.0f" $disk.SpareThreshold}}%){{end}}</span>
               {{end}}
               {{if gt0 $disk.CriticalWarning}}<span class="disk-info-key">Warning</span><span class="disk-info-val bad">{{printf "%.0f" $disk.CriticalWarning}}</span>{{end}}
-              {{if gt0 $disk.MediaErrors}}<span class="disk-info-key">Media Errors</span><span class="disk-info-val bad">{{printf "%.0f" $disk.MediaErrors}}</span>{{end}}
+              {{if $disk.HasMediaErrors}}<span class="disk-info-key">Media Errors</span><span class="disk-info-val {{if gt0 $disk.MediaErrors}}bad{{end}}">{{printf "%.0f" $disk.MediaErrors}}</span>{{end}}
               {{if gt0 $disk.ErrorLogCount}}<span class="disk-info-key">Error Log</span><span class="disk-info-val {{if gt $disk.ErrorLogCount 0.0}}warn{{end}}">{{printf "%.0f" $disk.ErrorLogCount}} entries</span>{{end}}
+              {{if gt0 $disk.ReallocatedSectors}}<span class="disk-info-key">Reallocated</span><span class="disk-info-val bad">{{printf "%.0f" $disk.ReallocatedSectors}} sectors</span>{{end}}
+              {{if gt0 $disk.PendingSectors}}<span class="disk-info-key">Pending</span><span class="disk-info-val bad">{{printf "%.0f" $disk.PendingSectors}} sectors</span>{{end}}
+              {{if gt0 $disk.OfflineUncorrectable}}<span class="disk-info-key">Offline Uncorr.</span><span class="disk-info-val bad">{{printf "%.0f" $disk.OfflineUncorrectable}}</span>{{end}}
+              {{if gt0 $disk.ReportedUncorrect}}<span class="disk-info-key">Reported Uncorr.</span><span class="disk-info-val bad">{{printf "%.0f" $disk.ReportedUncorrect}}</span>{{end}}
+              {{if gt0 $disk.UDMACRCErrors}}<span class="disk-info-key">UDMA CRC Errors</span><span class="disk-info-val warn">{{printf "%.0f" $disk.UDMACRCErrors}}</span>{{end}}
               {{if gt0 $disk.BytesWritten}}<span class="disk-info-key">Total Written</span><span class="disk-info-val">{{humanBytes $disk.BytesWritten}}</span>{{end}}
               {{if gt0 $disk.BytesRead}}<span class="disk-info-key">Total Read</span><span class="disk-info-val">{{humanBytes $disk.BytesRead}}</span>{{end}}
             </div>
