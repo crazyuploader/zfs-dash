@@ -1085,9 +1085,9 @@ button:focus-visible,
           <div class="node-url">{{$node.URL}}</div>
           <div class="node-ts" aria-label="Fetched at">{{fmtNodeTime $node.FetchedAt}}</div>
         </div>
-        {{if $node.ExporterInfo.Version}}<div class="node-exporter">
-          <span class="node-exporter-badge">zfs-exporter {{$node.ExporterInfo.Version}}</span>
-          {{if $node.ExporterInfo.GoVersion}}<span class="node-exporter-badge">{{$node.ExporterInfo.GoVersion}}</span>{{end}}
+        {{if or $node.ExporterInfo.Version $node.SmartctlInfo.ExporterVersion}}<div class="node-exporter">
+          {{if $node.ExporterInfo.Version}}<span class="node-exporter-badge">zfs-exporter {{$node.ExporterInfo.Version}}</span>{{end}}
+          {{if $node.SmartctlInfo.ExporterVersion}}<span class="node-exporter-badge">smartctl-exporter {{$node.SmartctlInfo.ExporterVersion}}</span>{{end}}
         </div>{{end}}
       </div>
     </div>
@@ -1209,25 +1209,36 @@ button:focus-visible,
               {{end}}
             </div>
           </div>
-          <!-- Health (SSD/NVMe) -->
-          {{if or $disk.HasPercentUsed $disk.HasMediaErrors (gt0 $disk.AvailableSpare) (gt0 $disk.BytesWritten) (gt0 $disk.BytesRead) (gt0 $disk.ErrorLogCount) (gt0 $disk.ReallocatedSectors) (gt0 $disk.PendingSectors) (gt0 $disk.OfflineUncorrectable) (gt0 $disk.ReportedUncorrect) (gt0 $disk.UDMACRCErrors)}}
+          <!-- Health (SSD/NVMe/HDD) -->
+          {{if or $disk.HasPercentUsed $disk.HasMediaErrors $disk.HasWearLeveling $disk.HasAvailReserved (gt0 $disk.AvailableSpare) (gt0 $disk.BytesWritten) (gt0 $disk.BytesRead) (gt0 $disk.ErrorLogCount) (gt0 $disk.ReallocatedSectors) (gt0 $disk.PendingSectors) (gt0 $disk.OfflineUncorrectable) (gt0 $disk.ReportedUncorrect) (gt0 $disk.UDMACRCErrors) (gt0 $disk.ProgramFailCount) (gt0 $disk.EraseFailCount) (gt0 $disk.TotalLBAsWritten) (gt0 $disk.TotalLBAsRead)}}
           <div>
             <div class="disk-detail-section-label">Health &amp; Usage</div>
             <div class="disk-info-grid">
               {{if $disk.HasPercentUsed}}
-              <span class="disk-info-key">Wear</span>
+              <span class="disk-info-key">NVMe Wear</span>
               <span>
                 <span class="disk-info-val {{if ge $disk.PercentageUsed 90.0}}bad{{else if ge $disk.PercentageUsed 70.0}}warn{{end}}">{{printf "%.0f" $disk.PercentageUsed}}%</span>
                 <div class="wear-bar-track"><div class="wear-bar-fill {{if ge $disk.PercentageUsed 90.0}}bad{{else if ge $disk.PercentageUsed 70.0}}warn{{end}}" style="width:{{printf "%.1f" $disk.PercentageUsed}}%"></div></div>
               </span>
               {{end}}
+              {{if $disk.HasWearLeveling}}
+              <span class="disk-info-key">Wear Leveling</span>
+              <span class="disk-info-val {{if le $disk.WearLevelingCount 20.0}}bad{{else if le $disk.WearLevelingCount 50.0}}warn{{end}}">{{printf "%.0f" $disk.WearLevelingCount}}</span>
+              {{end}}
+              {{if $disk.HasAvailReserved}}
+              <span class="disk-info-key">Reserved Space</span>
+              <span class="disk-info-val {{if le $disk.AvailableReservedPct 10.0}}bad{{else if le $disk.AvailableReservedPct 20.0}}warn{{end}}">{{printf "%.0f" $disk.AvailableReservedPct}}%</span>
+              {{end}}
+              {{if gt0 $disk.UsedReservedBlocks}}<span class="disk-info-key">Used Reserved</span><span class="disk-info-val warn">{{printf "%.0f" $disk.UsedReservedBlocks}}</span>{{end}}
               {{if gt0 $disk.AvailableSpare}}
-              <span class="disk-info-key">Spare</span>
+              <span class="disk-info-key">NVMe Spare</span>
               <span class="disk-info-val {{if and (gt0 $disk.SpareThreshold) (lt $disk.AvailableSpare $disk.SpareThreshold)}}bad{{else if le $disk.AvailableSpare 20.0}}warn{{end}}">{{printf "%.0f" $disk.AvailableSpare}}%{{if gt0 $disk.SpareThreshold}} (thr: {{printf "%.0f" $disk.SpareThreshold}}%){{end}}</span>
               {{end}}
               {{if gt0 $disk.CriticalWarning}}<span class="disk-info-key">Warning</span><span class="disk-info-val bad">{{printf "%.0f" $disk.CriticalWarning}}</span>{{end}}
               {{if $disk.HasMediaErrors}}<span class="disk-info-key">Media Errors</span><span class="disk-info-val {{if gt0 $disk.MediaErrors}}bad{{end}}">{{printf "%.0f" $disk.MediaErrors}}</span>{{end}}
               {{if gt0 $disk.ErrorLogCount}}<span class="disk-info-key">Error Log</span><span class="disk-info-val {{if gt $disk.ErrorLogCount 0.0}}warn{{end}}">{{printf "%.0f" $disk.ErrorLogCount}} entries</span>{{end}}
+              {{if gt0 $disk.ProgramFailCount}}<span class="disk-info-key">Program Fail</span><span class="disk-info-val bad">{{printf "%.0f" $disk.ProgramFailCount}}</span>{{end}}
+              {{if gt0 $disk.EraseFailCount}}<span class="disk-info-key">Erase Fail</span><span class="disk-info-val bad">{{printf "%.0f" $disk.EraseFailCount}}</span>{{end}}
               {{if gt0 $disk.ReallocatedSectors}}<span class="disk-info-key">Reallocated</span><span class="disk-info-val bad">{{printf "%.0f" $disk.ReallocatedSectors}} sectors</span>{{end}}
               {{if gt0 $disk.PendingSectors}}<span class="disk-info-key">Pending</span><span class="disk-info-val bad">{{printf "%.0f" $disk.PendingSectors}} sectors</span>{{end}}
               {{if gt0 $disk.OfflineUncorrectable}}<span class="disk-info-key">Offline Uncorr.</span><span class="disk-info-val bad">{{printf "%.0f" $disk.OfflineUncorrectable}}</span>{{end}}
@@ -1235,6 +1246,8 @@ button:focus-visible,
               {{if gt0 $disk.UDMACRCErrors}}<span class="disk-info-key">UDMA CRC Errors</span><span class="disk-info-val warn">{{printf "%.0f" $disk.UDMACRCErrors}}</span>{{end}}
               {{if gt0 $disk.BytesWritten}}<span class="disk-info-key">Total Written</span><span class="disk-info-val">{{humanBytes $disk.BytesWritten}}</span>{{end}}
               {{if gt0 $disk.BytesRead}}<span class="disk-info-key">Total Read</span><span class="disk-info-val">{{humanBytes $disk.BytesRead}}</span>{{end}}
+              {{if gt0 $disk.TotalLBAsWritten}}<span class="disk-info-key">LBAs Written</span><span class="disk-info-val">{{humanBytes (mul512 $disk.TotalLBAsWritten)}}</span>{{end}}
+              {{if gt0 $disk.TotalLBAsRead}}<span class="disk-info-key">LBAs Read</span><span class="disk-info-val">{{humanBytes (mul512 $disk.TotalLBAsRead)}}</span>{{end}}
             </div>
           </div>
           {{end}}

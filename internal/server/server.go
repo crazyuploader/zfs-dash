@@ -57,11 +57,12 @@ const (
 // nodeView is the subset of NodeData serialized into the page's inline JS.
 // URL is intentionally excluded to avoid exposing internal scrape endpoints to browsers.
 type nodeView struct {
-	Label        string             `json:"label"`
-	Location     string             `json:"location,omitempty"`
-	ExporterInfo model.ExporterInfo `json:"exporter_info,omitempty"`
-	Pools        []model.Pool       `json:"pools"`
-	Disks        []model.DiskInfo   `json:"disks,omitempty"`
+	Label        string              `json:"label"`
+	Location     string              `json:"location,omitempty"`
+	ExporterInfo model.ExporterInfo  `json:"exporter_info,omitempty"`
+	SmartctlInfo model.SmartctlInfo  `json:"smartctl_info,omitempty"`
+	Pools        []model.Pool        `json:"pools"`
+	Disks        []model.DiskInfo    `json:"disks,omitempty"`
 }
 
 // templateData is the data passed to the HTML template.
@@ -259,7 +260,7 @@ func setupLogger(cfg *config.Config) {
 func buildTemplateData(nodes []model.NodeData, cfg *config.Config) templateData {
 	views := make([]nodeView, len(nodes))
 	for i, n := range nodes {
-		views[i] = nodeView{Label: n.Label, Location: n.Location, ExporterInfo: n.ExporterInfo, Pools: n.Pools, Disks: n.Disks}
+		views[i] = nodeView{Label: n.Label, Location: n.Location, ExporterInfo: n.ExporterInfo, SmartctlInfo: n.SmartctlInfo, Pools: n.Pools, Disks: n.Disks}
 	}
 	nodesJSON, _ := json.Marshal(views)
 
@@ -497,6 +498,7 @@ func funcMap() template.FuncMap {
 		},
 		"diskHasIssues": func(d model.DiskInfo) bool {
 			return d.PendingSectors > 0 || d.OfflineUncorrectable > 0 || d.ReportedUncorrect > 0 ||
+				d.ProgramFailCount > 0 || d.EraseFailCount > 0 ||
 				(d.HasExitStatus && d.ExitStatus > 0)
 		},
 		"tempBarPct": func(temp, maxTemp float64) string {
@@ -565,6 +567,7 @@ func funcMap() template.FuncMap {
 		"gt0":    func(f float64) bool { return f > 0 },
 		"gte":    func(a, b float64) bool { return a >= b },
 		"mul100": func(f float64) float64 { return f * 100 },
+		"mul512": func(f float64) float64 { return f * 512 },
 		"join":   strings.Join,
 		"safeJS": func(s string) template.JS { return template.JS(s) },
 		"dict": func(values ...any) (map[string]any, error) {

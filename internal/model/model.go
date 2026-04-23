@@ -95,6 +95,17 @@ type DiskInfo struct {
 	InterfaceSpeed       float64 `json:"interface_speed,omitempty"` // bits/sec
 	ExitStatus           float64 `json:"exit_status,omitempty"`
 	HasExitStatus        bool    `json:"has_exit_status,omitempty"`
+
+	// SATA SSD-specific SMART attributes
+	WearLevelingCount    float64 `json:"wear_leveling_count,omitempty"`
+	HasWearLeveling      bool    `json:"has_wear_leveling,omitempty"`
+	UsedReservedBlocks   float64 `json:"used_reserved_blocks,omitempty"`
+	ProgramFailCount     float64 `json:"program_fail_count,omitempty"`
+	EraseFailCount       float64 `json:"erase_fail_count,omitempty"`
+	AvailableReservedPct float64 `json:"available_reserved_pct,omitempty"`
+	HasAvailReserved     bool    `json:"has_avail_reserved,omitempty"`
+	TotalLBAsWritten     float64 `json:"total_lbas_written,omitempty"`
+	TotalLBAsRead        float64 `json:"total_lbas_read,omitempty"`
 }
 
 // ExporterInfo holds metadata from zfs_exporter_build_info.
@@ -102,6 +113,13 @@ type ExporterInfo struct {
 	Version   string `json:"version,omitempty"`
 	GoVersion string `json:"go_version,omitempty"`
 	Revision  string `json:"revision,omitempty"`
+}
+
+// SmartctlInfo holds metadata from smartctl_exporter_build_info / smartctl_version.
+type SmartctlInfo struct {
+	ExporterVersion string `json:"exporter_version,omitempty"`
+	ToolVersion     string `json:"tool_version,omitempty"`
+	GoVersion       string `json:"go_version,omitempty"`
 }
 
 // NodeData holds all pool data fetched from one endpoint.
@@ -112,6 +130,7 @@ type NodeData struct {
 	FetchedAt    time.Time    `json:"fetched_at"`
 	Error        string       `json:"error,omitempty"`
 	ExporterInfo ExporterInfo `json:"exporter_info,omitempty"`
+	SmartctlInfo SmartctlInfo `json:"smartctl_info,omitempty"`
 	Pools        []Pool       `json:"pools"`
 	Disks        []DiskInfo   `json:"disks,omitempty"`
 }
@@ -135,6 +154,30 @@ func healthFromValue(v float64) PoolHealth {
 	default:
 		return HealthUnknown
 	}
+}
+
+// ExtractSmartctlInfo extracts metadata from smartctl_exporter_build_info and smartctl_version samples.
+func ExtractSmartctlInfo(samples []parser.Sample) SmartctlInfo {
+	var info SmartctlInfo
+	for _, s := range samples {
+		switch s.Name {
+		case "smartctl_exporter_build_info":
+			if info.ExporterVersion == "" {
+				info.ExporterVersion = s.Labels["version"]
+			}
+			if info.GoVersion == "" {
+				info.GoVersion = s.Labels["goversion"]
+			}
+		case "smartctl_version":
+			if info.ToolVersion == "" {
+				info.ToolVersion = s.Labels["json_format_version"]
+				if info.ToolVersion == "" {
+					info.ToolVersion = s.Labels["smartctl_version"]
+				}
+			}
+		}
+	}
+	return info
 }
 
 // ExtractExporterInfo extracts metadata from the zfs_exporter_build_info sample.
@@ -267,6 +310,23 @@ func ExtractDisks(samples []parser.Sample) []DiskInfo {
 				d.UDMACRCErrors = s.Value
 			case "Load_Cycle_Count":
 				d.LoadCycleCount = s.Value
+			// SATA SSD attributes
+			case "Wear_Leveling_Count":
+				d.WearLevelingCount = s.Value
+				d.HasWearLeveling = true
+			case "Used_Rsvd_Blk_Cnt_Chip", "Used_Rsvd_Blk_Cnt_Tot":
+				d.UsedReservedBlocks = s.Value
+			case "Program_Fail_Cnt_Total", "Program_Fail_Count_Chip":
+				d.ProgramFailCount = s.Value
+			case "Erase_Fail_Count_Total", "Erase_Fail_Count_Chip", "Erase_Fail_Count":
+				d.EraseFailCount = s.Value
+			case "Available_Reservd_Space", "Available_Reserved_Space":
+				d.AvailableReservedPct = s.Value
+				d.HasAvailReserved = true
+			case "Total_LBAs_Written":
+				d.TotalLBAsWritten = s.Value
+			case "Total_LBAs_Read":
+				d.TotalLBAsRead = s.Value
 			}
 		}
 	}

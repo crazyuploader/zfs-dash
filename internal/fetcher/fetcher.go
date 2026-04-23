@@ -176,6 +176,7 @@ func (f *Fetcher) fetchOne(ctx context.Context, ep config.Endpoint) model.NodeDa
 		// Still populate disks from smartctl even when ZFS is unavailable.
 		if len(smartctlSamples) > 0 {
 			nd.Disks = model.ExtractDisks(smartctlSamples)
+			nd.SmartctlInfo = model.ExtractSmartctlInfo(smartctlSamples)
 		}
 		return nd
 	}
@@ -184,6 +185,9 @@ func (f *Fetcher) fetchOne(ctx context.Context, ep config.Endpoint) model.NodeDa
 	nd.Pools = model.ExtractPools(allSamples)
 	nd.ExporterInfo = model.ExtractExporterInfo(allSamples)
 	nd.Disks = model.ExtractDisks(allSamples)
+	if len(smartctlSamples) > 0 {
+		nd.SmartctlInfo = model.ExtractSmartctlInfo(smartctlSamples)
+	}
 	slog.Debug("extracted pools", "label", ep.Label, "count", len(nd.Pools), "disks", len(nd.Disks))
 	return nd
 }
