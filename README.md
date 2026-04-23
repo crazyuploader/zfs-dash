@@ -26,7 +26,7 @@ Open `http://localhost:8054`.
 addr: ":8054"
 refresh: 300
 debug: false
-trusted_proxies: [] # List of proxy IPs (e.g., ["127.0.0.1", "10.0.0.1"])
+trusted_proxies: [] # List of proxy IPs or CIDR ranges (e.g., ["127.0.0.1", "100.64.0.0/10"])
 
 endpoints:
   - url: "http://host1:9134/metrics"
