@@ -19,19 +19,32 @@ Open `http://localhost:8054`.
 - `--refresh`: Auto-refresh interval in seconds (default: `300`).
 - `--debug`: Enable verbose debug logging.
 - `--trusted-proxies`: List of trusted proxy IPs for reverse proxy header support.
+- `--max-usage-percent`: Usage threshold for health failure (0 to disable).
+- `--log-format`: Log format, either `text` or `json` (default: `text`).
 
 ## Config
 
 ```yaml
 addr: ":8054"
 refresh: 300
+cache_ttl: 30 # Cache fetched metrics for 30 seconds to reduce load
+max_usage_percent: 90 # Fail health check if any pool > 90% full
+log_format: "text" # "text" or "json"
 debug: false
-trusted_proxies: [] # List of proxy IPs (e.g., ["127.0.0.1", "10.0.0.1"])
+trusted_proxies: [] # List of proxy IPs or CIDR ranges (e.g., ["127.0.0.1", "100.64.0.0/10"])
 
 endpoints:
   - url: "http://host1:9134/metrics"
     label: "node-1"
     location: "Singapore"
+```
+
+## Hot Reload
+
+You can reload the configuration (endpoints, debug mode, and cache settings) without restarting the server by sending a `SIGHUP` signal:
+
+```bash
+kill -HUP $(pgrep zfs-dash)
 ```
 
 ## Docker
@@ -57,8 +70,10 @@ Health checks are designed for monitoring tools like Uptime Kuma. They return `2
 - **Host Health:** `GET /api/health/:label`
   - Returns `503` if the host is unreachable OR if **no ZFS pools are detected**.
   - Returns `503` if any pool is degraded or faulted.
+  - Returns `503` if any pool exceeds `max_usage_percent`.
 - **Pool Health:** `GET /api/health/:label/:pool`
   - Returns `503` if the requested pool is **not found** or not healthy.
+  - Returns `503` if the pool exceeds `max_usage_percent`.
 
 Examples:
 

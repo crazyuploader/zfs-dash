@@ -2,11 +2,18 @@
 package server
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"log/slog"
+	"os"
+	"os/signal"
 	"strings"
+	"sync"
+	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/crazyuploader/zfs-dash/internal/config"
@@ -17,6 +24,26 @@ import (
 	"github.com/gofiber/fiber/v3/middleware/logger"
 )
 
+type Hub struct {
+	clients sync.Map // map[chan bool]bool
+}
+
+func newHub() *Hub {
+	return &Hub{}
+}
+
+func (h *Hub) broadcast() {
+	h.clients.Range(func(key, value any) bool {
+		ch := key.(chan bool)
+		select {
+		case ch <- true:
+		default:
+			// client slow or gone
+		}
+		return true
+	})
+}
+
 const (
 	httpReadTimeout  = 15 * time.Second
 	httpWriteTimeout = 15 * time.Second
@@ -24,11 +51,10 @@ const (
 )
 
 // templateData is the data passed to the HTML template.
-// All fields are pre-computed so the template stays logic-free.
 type templateData struct {
 	Nodes            []model.NodeData
 	RefreshSecs      int
-	FetchedAt        string // human-readable timestamp of the current fetch
+	FetchedAt        string
 	TotalPools       int
 	UnreachableNodes int
 	HealthyPools     int
@@ -39,12 +65,34 @@ type templateData struct {
 
 // Start registers routes and begins listening.
 func Start(cfg *config.Config) error {
-	if cfg.Debug {
-		fmt.Printf("DEBUG: starting server in debug mode\n")
-		fmt.Printf("DEBUG: config: %+v\n", cfg)
-	}
+	setupLogger(cfg)
 
-	f := fetcher.New(cfg.Endpoints, cfg.Debug)
+	var cfgPtr atomic.Pointer[config.Config]
+	cfgPtr.Store(cfg)
+
+	slog.Debug("starting server in debug mode", "config", cfg)
+
+	f := fetcher.New(cfg.Endpoints, cfg.Debug, cfg.CacheTTL)
+	hub := newHub()
+
+	// Hot-reload config on SIGHUP
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGHUP)
+	go func() {
+		for range sigs {
+			slog.Info("SIGHUP received, reloading config...")
+			newCfg, err := config.Load()
+			if err != nil {
+				slog.Error("config reload failed", "error", err)
+				continue
+			}
+			setupLogger(newCfg)
+			f.SetEndpoints(newCfg.Endpoints)
+			f.Debug = newCfg.Debug
+			cfgPtr.Store(newCfg)
+			slog.Info("config reloaded successfully")
+		}
+	}()
 
 	tmpl, err := template.New("dashboard").Funcs(funcMap()).Parse(templates.Dashboard)
 	if err != nil {
@@ -67,30 +115,83 @@ func Start(cfg *config.Config) error {
 		Format: "[${time}] ${status} - ${latency} ${ips} ${method} ${path}\n",
 	}))
 
-	// JSON API — useful for scripting / alerts.
+	// SSE Endpoint
+	app.Get("/events", func(c fiber.Ctx) error {
+		c.Set("Content-Type", "text/event-stream")
+		c.Set("Cache-Control", "no-cache")
+		c.Set("Connection", "keep-alive")
+		c.Set("Transfer-Encoding", "chunked")
+
+		notify := make(chan bool, 1)
+		hub.clients.Store(notify, true)
+		defer hub.clients.Delete(notify)
+
+		clientIP := c.IP()
+		c.Response().SetBodyStreamWriter(func(w *bufio.Writer) {
+			slog.Debug("SSE client connected", "ip", clientIP)
+			
+			// Send initial keep-alive
+			_, _ = fmt.Fprintf(w, ": keep-alive\n\n")
+			_ = w.Flush()
+
+			for {
+				select {
+				case <-notify:
+					_, _ = fmt.Fprintf(w, "data: refresh\n\n")
+					if err := w.Flush(); err != nil {
+						return
+					}
+				case <-c.Context().Done():
+					slog.Debug("SSE client disconnected", "ip", c.IP())
+					return
+				case <-time.After(30 * time.Second):
+					// keep-alive
+					_, _ = fmt.Fprintf(w, ": keep-alive\n\n")
+					if err := w.Flush(); err != nil {
+						return
+					}
+				}
+			}
+		})
+
+		return nil
+	})
+
+	// JSON API
 	app.Get("/api/metrics", func(c fiber.Ctx) error {
 		ctx, cancel := context.WithTimeout(c.Context(), 15*time.Second)
 		defer cancel()
-		nodes := f.FetchAll(ctx)
+		nodes, isCached := f.FetchAll(ctx)
+		if !isCached {
+			hub.broadcast()
+		}
+		setCacheHeaders(c, f, isCached)
 		return c.JSON(nodes)
 	})
 
 	app.Get("/api/health/:label", func(c fiber.Ctx) error {
-		return serveHealthCheck(c, f, c.Params("label"), "", cfg.Debug)
+		curCfg := cfgPtr.Load()
+		return serveHealthCheck(c, f, c.Params("label"), "", curCfg)
 	})
 
 	app.Get("/api/health/:label/:pool", func(c fiber.Ctx) error {
-		return serveHealthCheck(c, f, c.Params("label"), c.Params("pool"), cfg.Debug)
+		curCfg := cfgPtr.Load()
+		return serveHealthCheck(c, f, c.Params("label"), c.Params("pool"), curCfg)
 	})
 
-	// Dashboard — SSR HTML page.
+	// Dashboard
 	app.Get("/", func(c fiber.Ctx) error {
+		curCfg := cfgPtr.Load()
 		ctx, cancel := context.WithTimeout(c.Context(), 15*time.Second)
 		defer cancel()
 
-		nodes := f.FetchAll(ctx)
-		data := buildTemplateData(nodes, cfg)
+		nodes, isCached := f.FetchAll(ctx)
+		if !isCached {
+			hub.broadcast()
+		}
+		data := buildTemplateData(nodes, curCfg)
 
+		setCacheHeaders(c, f, isCached)
 		c.Set("Content-Type", "text/html; charset=utf-8")
 		return tmpl.Execute(c.Response().BodyWriter(), data)
 	})
@@ -99,8 +200,24 @@ func Start(cfg *config.Config) error {
 		return c.SendString("OK")
 	})
 
-	fmt.Printf("→  zfs-dash  http://localhost%s\n", cfg.Addr)
+	slog.Info("zfs-dash started", "url", fmt.Sprintf("http://localhost%s", cfg.Addr))
 	return app.Listen(cfg.Addr)
+}
+
+func setupLogger(cfg *config.Config) {
+	level := slog.LevelInfo
+	if cfg.Debug {
+		level = slog.LevelDebug
+	}
+
+	var handler slog.Handler
+	if cfg.LogFormat == "json" {
+		handler = slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: level})
+	} else {
+		handler = slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})
+	}
+
+	slog.SetDefault(slog.New(handler))
 }
 
 func buildTemplateData(nodes []model.NodeData, cfg *config.Config) templateData {
@@ -126,23 +243,21 @@ func buildTemplateData(nodes []model.NodeData, cfg *config.Config) templateData 
 			}
 		}
 	}
-
 	return d
 }
 
-func serveHealthCheck(c fiber.Ctx, f *fetcher.Fetcher, label, poolName string, debug bool) error {
-	if debug {
-		fmt.Printf("DEBUG: health check for label=%q pool=%q\n", label, poolName)
-	}
+func serveHealthCheck(c fiber.Ctx, f *fetcher.Fetcher, label, poolName string, cfg *config.Config) error {
+	slog.Debug("health check", "label", label, "pool", poolName)
+
 	ctx, cancel := context.WithTimeout(c.Context(), 15*time.Second)
 	defer cancel()
 
-	nodes := f.FetchAll(ctx)
+	nodes, isCached := f.FetchAll(ctx)
+	setCacheHeaders(c, f, isCached)
+
 	node, err := findNodeByLabel(nodes, label)
 	if err != nil {
-		if debug {
-			fmt.Printf("DEBUG: node %q not found\n", label)
-		}
+		slog.Debug("node not found", "label", label)
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"status": "not_found",
 			"label":  label,
@@ -150,9 +265,7 @@ func serveHealthCheck(c fiber.Ctx, f *fetcher.Fetcher, label, poolName string, d
 	}
 
 	if node.Error != "" {
-		if debug {
-			fmt.Printf("DEBUG: node %q has error: %s\n", label, node.Error)
-		}
+		slog.Debug("node has error", "label", label, "error", node.Error)
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
 			"status":   "down",
 			"label":    node.Label,
@@ -162,42 +275,54 @@ func serveHealthCheck(c fiber.Ctx, f *fetcher.Fetcher, label, poolName string, d
 
 	if poolName == "" {
 		badPools := []string{}
+		overThreshold := []string{}
 		for _, pool := range node.Pools {
 			if pool.Health != model.HealthOnline {
 				badPools = append(badPools, pool.Name)
+			} else if cfg.MaxUsagePercent > 0 && pool.UsedPercent > cfg.MaxUsagePercent {
+				overThreshold = append(overThreshold, pool.Name)
 			}
 		}
 
 		status := fiber.StatusOK
 		state := "up"
+		reason := ""
 		if len(node.Pools) == 0 {
 			status = fiber.StatusServiceUnavailable
 			state = "no_pools"
-			if debug {
-				fmt.Printf("DEBUG: node %q has 0 pools, returning no_pools\n", label)
-			}
+			slog.Debug("node has 0 pools", "label", label)
 		} else if len(badPools) > 0 {
 			status = fiber.StatusServiceUnavailable
 			state = "degraded"
-			if debug {
-				fmt.Printf("DEBUG: node %q has unhealthy pools: %v\n", label, badPools)
-			}
+			reason = "unhealthy_pools"
+			slog.Debug("node has unhealthy pools", "label", label, "pools", badPools)
+		} else if len(overThreshold) > 0 {
+			status = fiber.StatusServiceUnavailable
+			state = "degraded"
+			reason = "pool_over_threshold"
+			slog.Debug("node has pools over threshold", "label", label, "pools", overThreshold, "threshold", cfg.MaxUsagePercent)
 		}
 
-		return c.Status(status).JSON(fiber.Map{
+		res := fiber.Map{
 			"status":          state,
 			"label":           node.Label,
 			"location":        node.Location,
 			"pool_count":      len(node.Pools),
 			"unhealthy_pools": badPools,
-		})
+		}
+		if reason != "" {
+			res["reason"] = reason
+		}
+		if len(overThreshold) > 0 {
+			res["over_threshold_pools"] = overThreshold
+		}
+
+		return c.Status(status).JSON(res)
 	}
 
 	pool, err := findPoolByName(node.Pools, poolName)
 	if err != nil {
-		if debug {
-			fmt.Printf("DEBUG: pool %q not found on node %q\n", poolName, label)
-		}
+		slog.Debug("pool not found", "label", label, "pool", poolName)
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
 			"status": "down",
 			"label":  node.Label,
@@ -208,21 +333,34 @@ func serveHealthCheck(c fiber.Ctx, f *fetcher.Fetcher, label, poolName string, d
 
 	status := fiber.StatusOK
 	state := "up"
+	reason := ""
 	if pool.Health != model.HealthOnline {
 		status = fiber.StatusServiceUnavailable
 		state = "degraded"
-		if debug {
-			fmt.Printf("DEBUG: pool %q health is %s\n", poolName, pool.Health)
-		}
+		reason = "pool_unhealthy"
+		slog.Debug("pool health is not ONLINE", "label", label, "pool", poolName, "health", pool.Health)
+	} else if cfg.MaxUsagePercent > 0 && pool.UsedPercent > cfg.MaxUsagePercent {
+		status = fiber.StatusServiceUnavailable
+		state = "degraded"
+		reason = "pool_over_threshold"
+		slog.Debug("pool is over threshold", "label", label, "pool", poolName, "used_percent", pool.UsedPercent, "threshold", cfg.MaxUsagePercent)
 	}
 
-	return c.Status(status).JSON(fiber.Map{
+	res := fiber.Map{
 		"status":   state,
 		"label":    node.Label,
 		"location": node.Location,
 		"pool":     pool.Name,
 		"health":   pool.Health,
-	})
+	}
+	if reason != "" {
+		res["reason"] = reason
+	}
+	if status != fiber.StatusOK {
+		res["used_percent"] = pool.UsedPercent
+	}
+
+	return c.Status(status).JSON(res)
 }
 
 func findNodeByLabel(nodes []model.NodeData, label string) (*model.NodeData, error) {
@@ -231,7 +369,6 @@ func findNodeByLabel(nodes []model.NodeData, label string) (*model.NodeData, err
 			return &nodes[i], nil
 		}
 	}
-
 	return nil, fmt.Errorf("label %q not found", label)
 }
 
@@ -241,16 +378,24 @@ func findPoolByName(pools []model.Pool, name string) (*model.Pool, error) {
 			return &pools[i], nil
 		}
 	}
-
 	return nil, fmt.Errorf("pool %q not found", name)
+}
+
+func setCacheHeaders(c fiber.Ctx, f *fetcher.Fetcher, isCached bool) {
+	if isCached {
+		c.Set("X-Cache", "HIT")
+		expiresAt, _ := f.CacheInfo()
+		if time.Now().Before(expiresAt) {
+			c.Set("X-Cache-Expires-In", time.Until(expiresAt).Round(time.Second).String())
+		}
+	} else {
+		c.Set("X-Cache", "MISS")
+	}
 }
 
 func funcMap() template.FuncMap {
 	return template.FuncMap{
-		// humanBytes converts float64 bytes → "3.72 TB"
 		"humanBytes": model.HumanBytes,
-
-		// healthClass returns a CSS class string for the health badge.
 		"healthClass": func(h model.PoolHealth) string {
 			switch h {
 			case model.HealthOnline:
@@ -261,31 +406,18 @@ func funcMap() template.FuncMap {
 				return "health-faulted"
 			}
 		},
-
-		// fmtNodeTime formats the FetchedAt field on a NodeData.
 		"fmtNodeTime": func(t time.Time) string {
 			return t.Format("15:04:05")
 		},
-
-		// toJSON marshals any value to a JSON string (safe for use in <script>).
 		"toJSON": func(v any) string {
 			b, _ := json.Marshal(v)
 			return string(b)
 		},
-
-		// gt2 is a two-arg greater-than helper (template's gt needs comparable types).
 		"gt0":    func(f float64) bool { return f > 0 },
 		"gte":    func(a, b float64) bool { return a >= b },
 		"mul100": func(f float64) float64 { return f * 100 },
-
-		// join wraps strings.Join for use in templates.
-		"join": strings.Join,
-
-		// safeJS wraps a string as template.JS to skip escaping inside <script>.
+		"join":   strings.Join,
 		"safeJS": func(s string) template.JS { return template.JS(s) },
-
-		// dict creates a map from a list of alternating keys and values.
-		// Useful for passing multiple arguments to a sub-template.
 		"dict": func(values ...any) (map[string]any, error) {
 			if len(values)%2 != 0 {
 				return nil, fmt.Errorf("invalid dict call: expected even number of arguments")

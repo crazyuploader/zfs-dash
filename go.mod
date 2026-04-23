@@ -3,6 +3,7 @@ module github.com/crazyuploader/zfs-dash
 go 1.26.2
 
 require (
+	github.com/fsnotify/fsnotify v1.9.0
 	github.com/gofiber/fiber/v3 v3.1.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
@@ -10,7 +11,6 @@ require (
 
 require (
 	github.com/andybalholm/brotli v1.2.0 // indirect
-	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
 	github.com/gofiber/schema v1.7.0 // indirect
 	github.com/gofiber/utils/v2 v2.0.2 // indirect
