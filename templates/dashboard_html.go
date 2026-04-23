@@ -349,8 +349,9 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   padding: var(--space-3) var(--space-4) var(--space-4);
   background: var(--surface-2);
 }
-.disk-detail.open { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4) var(--space-6); }
-@media (max-width: 600px) { .disk-detail.open { grid-template-columns: 1fr; } }
+.disk-detail.open { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--space-4) var(--space-6); }
+@media (max-width: 800px) { .disk-detail.open { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 500px) { .disk-detail.open { grid-template-columns: 1fr; } }
 .disk-detail-section-label {
   font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--text-faint); margin-bottom: var(--space-2);
@@ -398,6 +399,27 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 .disk-info-grid { display: grid; grid-template-columns: auto 1fr; gap: 3px var(--space-3); align-items: baseline; }
 .disk-info-key { font-size: var(--text-xs); color: var(--text-faint); white-space: nowrap; }
 .disk-info-val { font-size: var(--text-xs); color: var(--text); font-family: var(--font-mono); }
+.disk-info-val.warn { color: var(--warning); }
+.disk-info-val.bad  { color: var(--error); font-weight: 600; }
+/* Wear bar */
+.wear-bar-track { height: 4px; border-radius: 2px; background: var(--surface-3); margin-top: 3px; overflow: hidden; }
+.wear-bar-fill { height: 100%; border-radius: 2px; transition: width 0.4s ease; background: var(--success); }
+.wear-bar-fill.warn { background: var(--warning); }
+.wear-bar-fill.bad  { background: var(--error); }
+/* Wear badge in summary row */
+.disk-wear-badge {
+  font-size: 0.58rem; font-weight: 700; letter-spacing: 0.04em;
+  padding: 1px 5px; border-radius: var(--radius-sm); white-space: nowrap;
+}
+.disk-wear-badge.good { background: color-mix(in oklab, var(--success) 12%, transparent); color: var(--success); }
+.disk-wear-badge.warn { background: color-mix(in oklab, var(--warning) 15%, transparent); color: var(--warning); }
+.disk-wear-badge.bad  { background: var(--error-dim); color: var(--error); }
+/* Media error badge */
+.disk-merr-badge {
+  font-size: 0.58rem; font-weight: 700; padding: 1px 5px;
+  border-radius: var(--radius-sm); white-space: nowrap;
+  background: var(--error-dim); color: var(--error);
+}
 
 /* ── Error Banner ────────────────────────────────────── */
 .node-err {
@@ -1120,6 +1142,8 @@ button:focus-visible,
           {{if gt0 $disk.Temperature}}<span class="disk-temp {{tempClass $disk.Temperature}}">{{printf "%.0f" $disk.Temperature}}°C</span>{{end}}
           <span class="disk-smart {{if $disk.SmartPassed}}pass{{else}}fail{{end}}">{{if $disk.SmartPassed}}PASS{{else}}FAIL{{end}}</span>
           {{if gt0 $disk.PowerOnHours}}<span class="disk-hours">{{fmtHours $disk.PowerOnHours}}</span>{{end}}
+          {{if gt0 $disk.PercentageUsed}}<span class="disk-wear-badge {{if ge $disk.PercentageUsed 90.0}}bad{{else if ge $disk.PercentageUsed 70.0}}warn{{else}}good{{end}}">{{printf "%.0f" $disk.PercentageUsed}}% used</span>{{end}}
+          {{if gt0 $disk.MediaErrors}}<span class="disk-merr-badge">{{printf "%.0f" $disk.MediaErrors}} err</span>{{end}}
           <span class="disk-expand-hint">▾</span>
         </div>
         <div class="disk-detail" id="disk-detail-{{$ni}}-{{$di}}">
@@ -1165,9 +1189,34 @@ button:focus-visible,
               {{if $disk.Interface}}<span class="disk-info-key">Interface</span><span class="disk-info-val">{{$disk.Interface}}</span>{{end}}
               {{if gt $disk.RotationRate 0}}<span class="disk-info-key">RPM</span><span class="disk-info-val">{{$disk.RotationRate}}</span>{{end}}
               {{if gt0 $disk.PowerOnHours}}<span class="disk-info-key">Power On</span><span class="disk-info-val">{{fmtHours $disk.PowerOnHours}} ({{printf "%.0f" $disk.PowerOnHours}}h)</span>{{end}}
+              {{if gt0 $disk.PowerCycles}}<span class="disk-info-key">Power Cycles</span><span class="disk-info-val">{{printf "%.0f" $disk.PowerCycles}}</span>{{end}}
               <span class="disk-info-key">SMART</span><span class="disk-smart {{if $disk.SmartPassed}}pass{{else}}fail{{end}}">{{if $disk.SmartPassed}}PASSED{{else}}FAILED{{end}}</span>
             </div>
           </div>
+          <!-- Health (SSD/NVMe) -->
+          {{if or (gt0 $disk.PercentageUsed) (gt0 $disk.AvailableSpare) (gt0 $disk.MediaErrors) (gt0 $disk.BytesWritten) (gt0 $disk.BytesRead)}}
+          <div>
+            <div class="disk-detail-section-label">Health &amp; Usage</div>
+            <div class="disk-info-grid">
+              {{if gt0 $disk.PercentageUsed}}
+              <span class="disk-info-key">Wear</span>
+              <span>
+                <span class="disk-info-val {{if ge $disk.PercentageUsed 90.0}}bad{{else if ge $disk.PercentageUsed 70.0}}warn{{end}}">{{printf "%.0f" $disk.PercentageUsed}}%</span>
+                <div class="wear-bar-track"><div class="wear-bar-fill {{if ge $disk.PercentageUsed 90.0}}bad{{else if ge $disk.PercentageUsed 70.0}}warn{{end}}" style="width:{{printf "%.1f" $disk.PercentageUsed}}%"></div></div>
+              </span>
+              {{end}}
+              {{if gt0 $disk.AvailableSpare}}
+              <span class="disk-info-key">Spare</span>
+              <span class="disk-info-val {{if and (gt0 $disk.SpareThreshold) (lt $disk.AvailableSpare $disk.SpareThreshold)}}bad{{else if le $disk.AvailableSpare 20.0}}warn{{end}}">{{printf "%.0f" $disk.AvailableSpare}}%{{if gt0 $disk.SpareThreshold}} (thr: {{printf "%.0f" $disk.SpareThreshold}}%){{end}}</span>
+              {{end}}
+              {{if gt0 $disk.CriticalWarning}}<span class="disk-info-key">Warning</span><span class="disk-info-val bad">{{printf "%.0f" $disk.CriticalWarning}}</span>{{end}}
+              {{if gt0 $disk.MediaErrors}}<span class="disk-info-key">Media Errors</span><span class="disk-info-val bad">{{printf "%.0f" $disk.MediaErrors}}</span>{{end}}
+              {{if gt0 $disk.ErrorLogCount}}<span class="disk-info-key">Error Log</span><span class="disk-info-val {{if gt $disk.ErrorLogCount 0.0}}warn{{end}}">{{printf "%.0f" $disk.ErrorLogCount}} entries</span>{{end}}
+              {{if gt0 $disk.BytesWritten}}<span class="disk-info-key">Total Written</span><span class="disk-info-val">{{humanBytes $disk.BytesWritten}}</span>{{end}}
+              {{if gt0 $disk.BytesRead}}<span class="disk-info-key">Total Read</span><span class="disk-info-val">{{humanBytes $disk.BytesRead}}</span>{{end}}
+            </div>
+          </div>
+          {{end}}
         </div>
         {{end}}
       </div>

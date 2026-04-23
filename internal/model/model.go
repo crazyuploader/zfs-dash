@@ -73,8 +73,17 @@ type DiskInfo struct {
 	TempTrip        float64 `json:"temp_trip,omitempty"`   // hardware trip/critical °C
 	SmartPassed     bool    `json:"smart_passed"`
 	PowerOnHours    float64 `json:"power_on_hours"`
+	PowerCycles     float64 `json:"power_cycles,omitempty"`
 	CapacityBytes   float64 `json:"capacity_bytes"`
-	RotationRate    int     `json:"rotation_rate"` // RPM; 0 = SSD/NVMe
+	RotationRate    int     `json:"rotation_rate"`            // RPM; 0 = SSD/NVMe
+	PercentageUsed  float64 `json:"percentage_used,omitempty"` // SSD/NVMe wear 0–100
+	AvailableSpare  float64 `json:"available_spare,omitempty"` // NVMe spare %
+	SpareThreshold  float64 `json:"spare_threshold,omitempty"` // NVMe spare threshold %
+	MediaErrors     float64 `json:"media_errors,omitempty"`    // unrecovered integrity errors
+	CriticalWarning float64 `json:"critical_warning,omitempty"`
+	BytesRead       float64 `json:"bytes_read,omitempty"`
+	BytesWritten    float64 `json:"bytes_written,omitempty"`
+	ErrorLogCount   float64 `json:"error_log_count,omitempty"`
 }
 
 // ExporterInfo holds metadata from zfs_exporter_build_info.
@@ -184,14 +193,33 @@ func ExtractDisks(samples []parser.Sample) []DiskInfo {
 				}
 			}
 		case "smartctl_device_smart_status":
-			d := ensure(device)
-			d.SmartPassed = s.Value == 1
+			ensure(device).SmartPassed = s.Value == 1
 		case "smartctl_device_power_on_seconds":
 			ensure(device).PowerOnHours = s.Value / 3600
+		case "smartctl_device_power_cycle_count":
+			ensure(device).PowerCycles = s.Value
 		case "smartctl_device_capacity_bytes":
 			ensure(device).CapacityBytes = s.Value
 		case "smartctl_device_rotation_rate":
 			ensure(device).RotationRate = int(math.Round(s.Value))
+		case "smartctl_device_percentage_used":
+			ensure(device).PercentageUsed = s.Value
+		case "smartctl_device_available_spare":
+			ensure(device).AvailableSpare = s.Value
+		case "smartctl_device_available_spare_threshold":
+			ensure(device).SpareThreshold = s.Value
+		case "smartctl_device_media_errors":
+			ensure(device).MediaErrors = s.Value
+		case "smartctl_device_critical_warning":
+			ensure(device).CriticalWarning = s.Value
+		case "smartctl_device_bytes_read":
+			ensure(device).BytesRead = s.Value
+		case "smartctl_device_bytes_written":
+			ensure(device).BytesWritten = s.Value
+		case "smartctl_device_error_log_count":
+			if s.Labels["error_log_type"] == "summary" {
+				ensure(device).ErrorLogCount = s.Value
+			}
 		}
 	}
 
