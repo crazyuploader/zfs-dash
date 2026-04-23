@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"syscall"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -57,6 +59,10 @@ func initConfig() {
 	viper.AutomaticEnv()
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Fprintln(os.Stderr, "Using config:", viper.ConfigFileUsed())
+		viper.OnConfigChange(func(e fsnotify.Event) {
+			_ = syscall.Kill(os.Getpid(), syscall.SIGHUP)
+		})
+		viper.WatchConfig()
 	} else if cfgFile != "" || !errors.As(err, new(viper.ConfigFileNotFoundError)) {
 		initConfigErr = err
 	}
