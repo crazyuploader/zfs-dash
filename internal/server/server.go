@@ -14,6 +14,7 @@ import (
 	"github.com/crazyuploader/zfs-dash/internal/model"
 	"github.com/crazyuploader/zfs-dash/templates"
 	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/logger"
 )
 
 const (
@@ -38,7 +39,12 @@ type templateData struct {
 
 // Start registers routes and begins listening.
 func Start(cfg *config.Config) error {
-	f := fetcher.New(cfg.Endpoints)
+	if cfg.Debug {
+		fmt.Printf("DEBUG: starting server in debug mode\n")
+		fmt.Printf("DEBUG: config: %+v\n", cfg)
+	}
+
+	f := fetcher.New(cfg.Endpoints, cfg.Debug)
 
 	tmpl, err := template.New("dashboard").Funcs(funcMap()).Parse(templates.Dashboard)
 	if err != nil {
@@ -46,11 +52,18 @@ func Start(cfg *config.Config) error {
 	}
 
 	app := fiber.New(fiber.Config{
-		AppName:      "zfs-dash",
-		ReadTimeout:  httpReadTimeout,
-		WriteTimeout: httpWriteTimeout,
-		IdleTimeout:  httpIdleTimeout,
+		AppName:                 "zfs-dash",
+		ReadTimeout:             httpReadTimeout,
+		WriteTimeout:            httpWriteTimeout,
+		IdleTimeout:             httpIdleTimeout,
+		EnableTrustedProxyCheck: len(cfg.TrustedProxies) > 0,
+		TrustedProxies:          cfg.TrustedProxies,
+		ProxyHeader:             fiber.HeaderXForwardedFor,
 	})
+
+	app.Use(logger.New(logger.Config{
+		Format: "[${time}] ${status} - ${latency} ${ips} ${method} ${path}\n",
+	}))
 
 	// JSON API — useful for scripting / alerts.
 	app.Get("/api/metrics", func(c fiber.Ctx) error {
@@ -61,11 +74,11 @@ func Start(cfg *config.Config) error {
 	})
 
 	app.Get("/api/health/:label", func(c fiber.Ctx) error {
-		return serveHealthCheck(c, f, c.Params("label"), "")
+		return serveHealthCheck(c, f, c.Params("label"), "", cfg.Debug)
 	})
 
 	app.Get("/api/health/:label/:pool", func(c fiber.Ctx) error {
-		return serveHealthCheck(c, f, c.Params("label"), c.Params("pool"))
+		return serveHealthCheck(c, f, c.Params("label"), c.Params("pool"), cfg.Debug)
 	})
 
 	// Dashboard — SSR HTML page.
@@ -115,13 +128,19 @@ func buildTemplateData(nodes []model.NodeData, cfg *config.Config) templateData 
 	return d
 }
 
-func serveHealthCheck(c fiber.Ctx, f *fetcher.Fetcher, label, poolName string) error {
+func serveHealthCheck(c fiber.Ctx, f *fetcher.Fetcher, label, poolName string, debug bool) error {
+	if debug {
+		fmt.Printf("DEBUG: health check for label=%q pool=%q\n", label, poolName)
+	}
 	ctx, cancel := context.WithTimeout(c.Context(), 15*time.Second)
 	defer cancel()
 
 	nodes := f.FetchAll(ctx)
 	node, err := findNodeByLabel(nodes, label)
 	if err != nil {
+		if debug {
+			fmt.Printf("DEBUG: node %q not found\n", label)
+		}
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"status": "not_found",
 			"label":  label,
@@ -129,6 +148,9 @@ func serveHealthCheck(c fiber.Ctx, f *fetcher.Fetcher, label, poolName string) e
 	}
 
 	if node.Error != "" {
+		if debug {
+			fmt.Printf("DEBUG: node %q has error: %s\n", label, node.Error)
+		}
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
 			"status":   "down",
 			"label":    node.Label,
@@ -149,9 +171,15 @@ func serveHealthCheck(c fiber.Ctx, f *fetcher.Fetcher, label, poolName string) e
 		if len(node.Pools) == 0 {
 			status = fiber.StatusServiceUnavailable
 			state = "no_pools"
+			if debug {
+				fmt.Printf("DEBUG: node %q has 0 pools, returning no_pools\n", label)
+			}
 		} else if len(badPools) > 0 {
 			status = fiber.StatusServiceUnavailable
 			state = "degraded"
+			if debug {
+				fmt.Printf("DEBUG: node %q has unhealthy pools: %v\n", label, badPools)
+			}
 		}
 
 		return c.Status(status).JSON(fiber.Map{
@@ -165,6 +193,9 @@ func serveHealthCheck(c fiber.Ctx, f *fetcher.Fetcher, label, poolName string) e
 
 	pool, err := findPoolByName(node.Pools, poolName)
 	if err != nil {
+		if debug {
+			fmt.Printf("DEBUG: pool %q not found on node %q\n", poolName, label)
+		}
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
 			"status": "down",
 			"label":  node.Label,
@@ -178,6 +209,9 @@ func serveHealthCheck(c fiber.Ctx, f *fetcher.Fetcher, label, poolName string) e
 	if pool.Health != model.HealthOnline {
 		status = fiber.StatusServiceUnavailable
 		state = "degraded"
+		if debug {
+			fmt.Printf("DEBUG: pool %q health is %s\n", poolName, pool.Health)
+		}
 	}
 
 	return c.Status(status).JSON(fiber.Map{

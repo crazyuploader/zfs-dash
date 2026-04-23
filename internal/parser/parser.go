@@ -27,7 +27,7 @@ func Parse(r io.Reader) ([]Sample, error) {
 		}
 		s, err := parseLine(line)
 		if err != nil {
-			continue // skip unparseable lines gracefully
+			return nil, err
 		}
 		samples = append(samples, s)
 	}

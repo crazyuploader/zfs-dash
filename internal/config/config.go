@@ -17,16 +17,20 @@ type Endpoint struct {
 
 // Config holds all runtime options.
 type Config struct {
-	Endpoints []Endpoint
-	Addr      string
-	Refresh   time.Duration
+	Endpoints      []Endpoint
+	Addr           string
+	Refresh        time.Duration
+	Debug          bool
+	TrustedProxies []string
 }
 
 // Load reads viper state into a validated Config.
 func Load() (*Config, error) {
 	cfg := &Config{
-		Addr:    cmp.Or(viper.GetString("addr"), ":8054"),
-		Refresh: time.Duration(viper.GetInt("refresh")) * time.Second,
+		Addr:           cmp.Or(viper.GetString("addr"), ":8054"),
+		Refresh:        time.Duration(viper.GetInt("refresh")) * time.Second,
+		Debug:          viper.GetBool("debug"),
+		TrustedProxies: viper.GetStringSlice("trusted_proxies"),
 	}
 	if cfg.Refresh <= 0 {
 		cfg.Refresh = 300 * time.Second

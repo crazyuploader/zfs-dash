@@ -34,10 +34,14 @@ func init() {
 	rootCmd.PersistentFlags().StringSlice("endpoints", nil, "ZFS exporter /metrics URLs (comma-separated or repeated)")
 	rootCmd.PersistentFlags().String("addr", ":8054", "listen address")
 	rootCmd.PersistentFlags().Int("refresh", 300, "auto-refresh interval in seconds")
+	rootCmd.PersistentFlags().Bool("debug", false, "enable debug logging")
+	rootCmd.PersistentFlags().StringSlice("trusted-proxies", nil, "list of trusted proxy IPs")
 
 	_ = viper.BindPFlag("endpoints", rootCmd.PersistentFlags().Lookup("endpoints"))
 	_ = viper.BindPFlag("addr", rootCmd.PersistentFlags().Lookup("addr"))
 	_ = viper.BindPFlag("refresh", rootCmd.PersistentFlags().Lookup("refresh"))
+	_ = viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
+	_ = viper.BindPFlag("trusted_proxies", rootCmd.PersistentFlags().Lookup("trusted-proxies"))
 }
 
 func initConfig() {

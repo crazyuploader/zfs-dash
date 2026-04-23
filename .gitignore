@@ -31,4 +31,8 @@ go.work.sum
 # .idea/
 # .vscode/
 
+# Configuration
 config.yaml
+
+# Binaries
+zfs-dash
