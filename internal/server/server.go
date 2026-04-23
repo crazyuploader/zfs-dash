@@ -52,13 +52,15 @@ func Start(cfg *config.Config) error {
 	}
 
 	app := fiber.New(fiber.Config{
-		AppName:                 "zfs-dash",
-		ReadTimeout:             httpReadTimeout,
-		WriteTimeout:            httpWriteTimeout,
-		IdleTimeout:             httpIdleTimeout,
-		EnableTrustedProxyCheck: len(cfg.TrustedProxies) > 0,
-		TrustedProxies:          cfg.TrustedProxies,
-		ProxyHeader:             fiber.HeaderXForwardedFor,
+		AppName:      "zfs-dash",
+		ReadTimeout:  httpReadTimeout,
+		WriteTimeout: httpWriteTimeout,
+		IdleTimeout:  httpIdleTimeout,
+		TrustProxy:   len(cfg.TrustedProxies) > 0,
+		TrustProxyConfig: fiber.TrustProxyConfig{
+			Proxies: cfg.TrustedProxies,
+		},
+		ProxyHeader: fiber.HeaderXForwardedFor,
 	})
 
 	app.Use(logger.New(logger.Config{
