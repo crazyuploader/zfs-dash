@@ -173,6 +173,10 @@ func (f *Fetcher) fetchOne(ctx context.Context, ep config.Endpoint) model.NodeDa
 
 	if zfsErr != nil {
 		nd.Error = zfsErr.Error()
+		// Still populate disks from smartctl even when ZFS is unavailable.
+		if len(smartctlSamples) > 0 {
+			nd.Disks = model.ExtractDisks(smartctlSamples)
+		}
 		return nd
 	}
 

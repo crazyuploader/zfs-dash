@@ -348,6 +348,23 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 }
 .node-err svg { flex-shrink: 0; margin-top: 1px; }
 
+/* ── Node error state (ZFS unavailable) ─────────────── */
+.node--error {
+  border-color: color-mix(in oklab, var(--error) 28%, transparent);
+  background: color-mix(in oklab, var(--error) 3%, var(--surface-1));
+}
+.node--error .node-prompt { color: var(--error); animation: none; }
+.node-zfs-err {
+  display: flex; align-items: flex-start; gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--error-dim);
+  border: 1px solid color-mix(in oklab, var(--error) 22%, transparent);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs); color: var(--error); font-family: var(--font-mono);
+  margin-bottom: var(--space-2);
+}
+.node-zfs-err svg { flex-shrink: 0; margin-top: 1px; }
+
 /* ── Empty State ─────────────────────────────────────── */
 .empty {
   text-align: center; padding: var(--space-10) var(--space-6);
@@ -888,53 +905,6 @@ button:focus-visible,
     </div>
   </div>
 
-  <!-- ══ Unreachable Nodes ══ -->
-  {{if gt .UnreachableNodes 0}}
-  <div class="alert-section faulted animate-in animate-in-delayed-2" id="section-unreachable">
-    <button class="alert-toggle" id="toggle-unreachable"
-            aria-expanded="false" aria-controls="body-unreachable">
-      <div class="alert-toggle-left">
-        <div class="alert-dot" aria-hidden="true"></div>
-        <div class="alert-toggle-text">
-          <span class="alert-toggle-title">Unreachable Nodes</span>
-          <span class="alert-toggle-badge">{{.UnreachableNodes}}</span>
-          <span class="alert-toggle-desc">cannot be reached</span>
-        </div>
-      </div>
-      <svg class="alert-arrow" id="arrow-unreachable"
-           width="16" height="16" viewBox="0 0 24 24" fill="none"
-           stroke="currentColor" stroke-width="2" aria-hidden="true">
-        <path d="m6 9 6 6 6-6"/>
-      </svg>
-    </button>
-    <hr class="alert-divider hidden" id="divider-unreachable">
-    <div class="alert-body collapsed" id="body-unreachable">
-      {{range $node := .Nodes}}
-      {{if $node.Error}}
-      <div class="alert-node-err">
-        <div class="alert-node-err-head">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--error)"
-               stroke-width="2" stroke-linecap="round" flex-shrink="0" aria-hidden="true">
-            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
-            <line x1="12" y1="16" x2="12.01" y2="16"/>
-          </svg>
-          <span class="alert-node-err-label">{{$node.Label}}</span>
-          {{if $node.Location}}<span class="alert-node-err-loc">{{$node.Location}}</span>{{end}}
-        </div>
-        <div class="alert-node-err-url">{{$node.URL}}</div>
-        <div class="alert-node-err-msg">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="2" aria-hidden="true">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-          </svg>
-          <span>{{$node.Error}}</span>
-        </div>
-      </div>
-      {{end}}
-      {{end}}
-    </div>
-  </div>
-  {{end}}
 
   <!-- ══ Degraded Pools ══ -->
   {{if gt .DegradedPools 0}}
@@ -1009,10 +979,9 @@ button:focus-visible,
   </div>
   {{end}}
 
-  <!-- ══ Per-node healthy pools ══ -->
+  <!-- ══ Per-node pools ══ -->
   {{range $ni, $node := .Nodes}}
-  {{if not $node.Error}}
-  <section class="node animate-in {{if eq $ni 0}}animate-in-delayed-3{{else if eq $ni 1}}animate-in-delayed-4{{else if eq $ni 2}}animate-in-delayed-5{{else}}animate-in-delayed-6{{end}}" aria-label="Node {{$node.Label}}">
+  <section class="node {{if $node.Error}}node--error{{end}} animate-in {{if eq $ni 0}}animate-in-delayed-3{{else if eq $ni 1}}animate-in-delayed-4{{else if eq $ni 2}}animate-in-delayed-5{{else}}animate-in-delayed-6{{end}}" aria-label="Node {{$node.Label}}">
 
     <div class="node-head">
       <div class="node-icon-wrap" aria-hidden="true">
@@ -1020,7 +989,7 @@ button:focus-visible,
       </div>
       <div class="node-meta">
         <div class="node-label-row">
-          <div class="node-label">{{.Label}}</div>
+          <div class="node-label">{{$node.Label}}</div>
           {{if $node.Location}}<div class="node-location">{{$node.Location}}</div>{{end}}
         </div>
         <div class="node-url-row">
@@ -1034,7 +1003,16 @@ button:focus-visible,
       </div>
     </div>
 
-    {{if not $node.Pools}}
+    {{if $node.Error}}
+    <div class="node-zfs-err">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      <span>ZFS unavailable: {{$node.Error}}</span>
+    </div>
+    {{else if not $node.Pools}}
     <div class="empty">
       <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor"
            stroke-width="1.4" aria-hidden="true">
@@ -1087,7 +1065,6 @@ button:focus-visible,
     {{end}}
 
   </section>
-  {{end}}
   {{end}}
 
 </main>

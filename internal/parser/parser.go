@@ -37,16 +37,29 @@ func Parse(r io.Reader) ([]Sample, error) {
 }
 
 func parseLine(line string) (Sample, error) {
-	parts := strings.Fields(line)
-	if len(parts) < 2 {
-		return Sample{}, io.ErrUnexpectedEOF
+	var raw, valueStr string
+	if idx := strings.LastIndexByte(line, '}'); idx >= 0 {
+		raw = line[:idx+1]
+		rest := strings.TrimSpace(line[idx+1:])
+		// rest may be "<value>" or "<value> <timestamp>"
+		if sp := strings.IndexByte(rest, ' '); sp >= 0 {
+			valueStr = rest[:sp]
+		} else {
+			valueStr = rest
+		}
+	} else {
+		// No labels: "metric_name value [timestamp]"
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			return Sample{}, io.ErrUnexpectedEOF
+		}
+		raw = fields[0]
+		valueStr = fields[1]
 	}
-	val, err := strconv.ParseFloat(parts[1], 64)
+	val, err := strconv.ParseFloat(valueStr, 64)
 	if err != nil {
 		return Sample{}, err
 	}
-
-	raw := parts[0]
 	name := raw
 	labels := map[string]string{}
 
