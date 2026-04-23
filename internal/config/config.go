@@ -17,14 +17,14 @@ type Endpoint struct {
 
 // Config holds all runtime options.
 type Config struct {
-	Endpoints        []Endpoint
-	Addr             string
-	Refresh          time.Duration
-	CacheTTL         time.Duration
-	Debug            bool
-	TrustedProxies   []string
-	MaxUsagePercent  float64
-	LogFormat        string // "text" or "json"
+	Endpoints       []Endpoint
+	Addr            string
+	Refresh         time.Duration
+	CacheTTL        time.Duration
+	Debug           bool
+	TrustedProxies  []string
+	MaxUsagePercent float64
+	LogFormat       string // "text" or "json"
 }
 
 // Load reads viper state into a validated Config.

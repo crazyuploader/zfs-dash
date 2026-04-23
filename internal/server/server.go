@@ -46,7 +46,7 @@ func (h *Hub) broadcast() {
 
 const (
 	httpReadTimeout  = 15 * time.Second
-	httpWriteTimeout = 15 * time.Second
+	httpWriteTimeout = 0
 	httpIdleTimeout  = 60 * time.Second
 )
 
@@ -129,7 +129,7 @@ func Start(cfg *config.Config) error {
 		clientIP := c.IP()
 		c.Response().SetBodyStreamWriter(func(w *bufio.Writer) {
 			slog.Debug("SSE client connected", "ip", clientIP)
-			
+
 			// Send initial keep-alive
 			_, _ = fmt.Fprintf(w, ": keep-alive\n\n")
 			_ = w.Flush()
