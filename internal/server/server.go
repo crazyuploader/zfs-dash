@@ -146,7 +146,10 @@ func serveHealthCheck(c fiber.Ctx, f *fetcher.Fetcher, label, poolName string) e
 
 		status := fiber.StatusOK
 		state := "up"
-		if len(badPools) > 0 {
+		if len(node.Pools) == 0 {
+			status = fiber.StatusServiceUnavailable
+			state = "no_pools"
+		} else if len(badPools) > 0 {
 			status = fiber.StatusServiceUnavailable
 			state = "degraded"
 		}
@@ -162,10 +165,11 @@ func serveHealthCheck(c fiber.Ctx, f *fetcher.Fetcher, label, poolName string) e
 
 	pool, err := findPoolByName(node.Pools, poolName)
 	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"status": "not_found",
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+			"status": "down",
 			"label":  node.Label,
 			"pool":   poolName,
+			"reason": "pool_not_found",
 		})
 	}
 
