@@ -32,7 +32,7 @@ max_usage_percent: 90 # Fail health check if any pool > 90% full
 log_format: "text" # "text" or "json"
 debug: false
 trusted_proxies: [] # List of proxy IPs or CIDR ranges (e.g., ["127.0.0.1", "100.64.0.0/10"])
-```
+
 endpoints:
   - url: "http://host1:9134/metrics"
     label: "node-1"
