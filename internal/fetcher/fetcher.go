@@ -33,7 +33,13 @@ type Fetcher struct {
 // New creates a Fetcher for the provided endpoints.
 func New(endpoints []config.Endpoint, debug bool, cacheTTL time.Duration) *Fetcher {
 	return &Fetcher{
-		client:    &http.Client{Timeout: fetchTimeout},
+		client: &http.Client{
+			Timeout: fetchTimeout,
+			Transport: &http.Transport{
+				MaxIdleConnsPerHost: 10,
+				IdleConnTimeout:     90 * time.Second,
+			},
+		},
 		endpoints: endpoints,
 		Debug:     debug,
 		cacheTTL:  cacheTTL,

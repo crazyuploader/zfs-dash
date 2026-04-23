@@ -30,7 +30,7 @@ type Config struct {
 // Load reads viper state into a validated Config.
 func Load() (*Config, error) {
 	cfg := &Config{
-		Addr:            cmp.Or(viper.GetString("addr"), ":8054"),
+		Addr:            viper.GetString("addr"),
 		Refresh:         time.Duration(viper.GetInt("refresh")) * time.Second,
 		CacheTTL:        time.Duration(cmp.Or(viper.GetInt("cache_ttl"), 30)) * time.Second,
 		Debug:           viper.GetBool("debug"),

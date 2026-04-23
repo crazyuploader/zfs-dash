@@ -4,6 +4,7 @@ package parser
 import (
 	"bufio"
 	"io"
+	"log/slog"
 	"strconv"
 	"strings"
 )
@@ -27,7 +28,8 @@ func Parse(r io.Reader) ([]Sample, error) {
 		}
 		s, err := parseLine(line)
 		if err != nil {
-			return nil, err
+			slog.Debug("skipping unparseable line", "line", line, "error", err)
+			continue
 		}
 		samples = append(samples, s)
 	}

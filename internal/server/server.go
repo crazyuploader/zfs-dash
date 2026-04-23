@@ -3,6 +3,7 @@ package server
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -38,16 +39,15 @@ func (h *Hub) broadcast() {
 		select {
 		case ch <- true:
 		default:
-			// client slow or gone
+			h.clients.Delete(ch)
 		}
 		return true
 	})
 }
 
 const (
-	httpReadTimeout  = 15 * time.Second
-	httpWriteTimeout = 0
-	httpIdleTimeout  = 60 * time.Second
+	httpReadTimeout = 15 * time.Second
+	httpIdleTimeout = 60 * time.Second
 )
 
 // templateData is the data passed to the HTML template.
@@ -102,7 +102,7 @@ func Start(cfg *config.Config) error {
 	app := fiber.New(fiber.Config{
 		AppName:      "zfs-dash",
 		ReadTimeout:  httpReadTimeout,
-		WriteTimeout: httpWriteTimeout,
+		WriteTimeout: 0, // Disable write timeout for SSE streams
 		IdleTimeout:  httpIdleTimeout,
 		TrustProxy:   len(cfg.TrustedProxies) > 0,
 		TrustProxyConfig: fiber.TrustProxyConfig{
@@ -131,8 +131,11 @@ func Start(cfg *config.Config) error {
 			slog.Debug("SSE client connected", "ip", clientIP)
 
 			// Send initial keep-alive
-			_, _ = fmt.Fprintf(w, ": keep-alive\n\n")
+			_, _ = fmt.Fprintf(w, ":\n\n")
 			_ = w.Flush()
+
+			ticker := time.NewTicker(30 * time.Second)
+			defer ticker.Stop()
 
 			for {
 				select {
@@ -142,11 +145,11 @@ func Start(cfg *config.Config) error {
 						return
 					}
 				case <-c.Context().Done():
-					slog.Debug("SSE client disconnected", "ip", c.IP())
+					slog.Debug("SSE client disconnected", "ip", clientIP)
 					return
-				case <-time.After(30 * time.Second):
+				case <-ticker.C:
 					// keep-alive
-					_, _ = fmt.Fprintf(w, ": keep-alive\n\n")
+					_, _ = fmt.Fprintf(w, ":\n\n")
 					if err := w.Flush(); err != nil {
 						return
 					}
@@ -192,8 +195,14 @@ func Start(cfg *config.Config) error {
 		data := buildTemplateData(nodes, curCfg)
 
 		setCacheHeaders(c, f, isCached)
+		var buf bytes.Buffer
+		if err := tmpl.Execute(&buf, data); err != nil {
+			slog.Error("template execution failed", "error", err)
+			return fiber.ErrInternalServerError
+		}
+
 		c.Set("Content-Type", "text/html; charset=utf-8")
-		return tmpl.Execute(c.Response().BodyWriter(), data)
+		return c.Send(buf.Bytes())
 	})
 
 	app.Get("/health", func(c fiber.Ctx) error {

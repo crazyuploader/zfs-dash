@@ -101,7 +101,7 @@ func ExtractPools(samples []parser.Sample) []Pool {
 		return pools[name]
 	}
 	ensureDataset := func(pool, name, datasetType string) *Dataset {
-		key := pool + "\x00" + name
+		key := pool + "/" + name
 		if _, ok := datasets[key]; !ok {
 			datasets[key] = &Dataset{
 				Name: name,
