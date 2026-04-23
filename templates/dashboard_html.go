@@ -6,6 +6,7 @@ const dashboardHTML = `<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ZFS Dashboard</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cellipse cx='16' cy='9' rx='12' ry='4' fill='%234f8ef7'/%3E%3Cpath d='M4 9v7c0 2.21 5.37 4 12 4s12-1.79 12-4V9c0 2.21-5.37 4-12 4S4 11.21 4 9z' fill='%233a7bd5'/%3E%3Cpath d='M4 16v7c0 2.21 5.37 4 12 4s12-1.79 12-4v-7c0 2.21-5.37 4-12 4S4 18.21 4 16z' fill='%232563b0'/%3E%3C/svg%3E">
 <style>
 /* ── Design Tokens ─────────────────────────────────── */
 :root {

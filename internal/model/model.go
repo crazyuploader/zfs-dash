@@ -75,7 +75,7 @@ type DiskInfo struct {
 	PowerOnHours    float64 `json:"power_on_hours"`
 	PowerCycles     float64 `json:"power_cycles,omitempty"`
 	CapacityBytes   float64 `json:"capacity_bytes"`
-	RotationRate    int     `json:"rotation_rate"`            // RPM; 0 = SSD/NVMe
+	RotationRate    int     `json:"rotation_rate"`             // RPM; 0 = SSD/NVMe
 	PercentageUsed  float64 `json:"percentage_used,omitempty"` // SSD/NVMe wear 0–100
 	AvailableSpare  float64 `json:"available_spare,omitempty"` // NVMe spare %
 	SpareThreshold  float64 `json:"spare_threshold,omitempty"` // NVMe spare threshold %
