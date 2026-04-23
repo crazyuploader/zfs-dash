@@ -317,6 +317,7 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   transition: background var(--transition);
 }
 .disk-row:hover { background: var(--surface-2); }
+.disk-row.disk-row-open { background: var(--surface-2); }
 .disk-model { flex: 1; min-width: 120px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .disk-serial { color: var(--text-faint); white-space: nowrap; }
 .disk-cap { color: var(--text-muted); white-space: nowrap; }
@@ -338,6 +339,65 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 .disk-smart.pass { background: var(--success-dim); color: var(--success); }
 .disk-smart.fail { background: var(--error-dim);   color: var(--error); }
 .disk-hours { color: var(--text-faint); white-space: nowrap; }
+.disk-expand-hint { color: var(--text-faint); font-size: 0.6rem; margin-left: auto; opacity: 0.5; flex-shrink: 0; }
+.disk-row { cursor: pointer; }
+.disk-row:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+
+/* Disk detail panel */
+.disk-detail {
+  display: none; border-top: 1px solid var(--border);
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  background: var(--surface-2);
+}
+.disk-detail.open { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4) var(--space-6); }
+@media (max-width: 600px) { .disk-detail.open { grid-template-columns: 1fr; } }
+.disk-detail-section-label {
+  font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-faint); margin-bottom: var(--space-2);
+}
+.disk-temp-current {
+  font-size: var(--text-lg); font-weight: 700; line-height: 1; margin-bottom: var(--space-2);
+}
+.disk-temp-current.cool { color: var(--success); }
+.disk-temp-current.warm { color: var(--warning); }
+.disk-temp-current.hot  { color: var(--error); }
+/* Temperature gauge */
+.temp-gauge-wrap { position: relative; margin-bottom: var(--space-1); }
+.temp-gauge-track {
+  height: 6px; border-radius: 3px; overflow: hidden;
+  background: linear-gradient(to right,
+    color-mix(in oklab, var(--success) 40%, var(--surface-3)) 0%,
+    color-mix(in oklab, var(--success) 40%, var(--surface-3)) 64.3%,
+    color-mix(in oklab, var(--warning) 40%, var(--surface-3)) 64.3%,
+    color-mix(in oklab, var(--warning) 40%, var(--surface-3)) 78.6%,
+    color-mix(in oklab, var(--error)   40%, var(--surface-3)) 78.6%,
+    color-mix(in oklab, var(--error)   40%, var(--surface-3)) 100%
+  );
+  position: relative;
+}
+.temp-gauge-fill {
+  height: 100%; border-radius: 3px;
+  transition: width 0.5s cubic-bezier(.4,0,.2,1);
+  position: relative;
+}
+.temp-gauge-fill.cool { background: var(--success); }
+.temp-gauge-fill.warm { background: var(--warning); }
+.temp-gauge-fill.hot  { background: var(--error);   }
+.temp-gauge-trip {
+  position: absolute; top: -3px; width: 2px; height: 12px;
+  background: var(--error); border-radius: 1px; opacity: 0.8;
+}
+.temp-gauge-labels {
+  display: flex; justify-content: space-between;
+  font-size: 0.58rem; color: var(--text-faint); margin-top: 2px;
+}
+.temp-lifetime {
+  font-size: var(--text-xs); color: var(--text-faint); margin-top: var(--space-1);
+}
+/* Drive info grid */
+.disk-info-grid { display: grid; grid-template-columns: auto 1fr; gap: 3px var(--space-3); align-items: baseline; }
+.disk-info-key { font-size: var(--text-xs); color: var(--text-faint); white-space: nowrap; }
+.disk-info-val { font-size: var(--text-xs); color: var(--text); font-family: var(--font-mono); }
 
 /* ── Error Banner ────────────────────────────────────── */
 .node-err {
@@ -1049,15 +1109,65 @@ button:focus-visible,
         </svg>
       </button>
       <div class="disk-list" id="disk-list-{{$ni}}">
-        {{range $disk := $node.Disks}}
-        <div class="disk-row">
+        {{range $di, $disk := $node.Disks}}
+        <div class="disk-row" id="disk-row-{{$ni}}-{{$di}}"
+             tabindex="0" role="button" aria-expanded="false"
+             aria-controls="disk-detail-{{$ni}}-{{$di}}">
           <span class="disk-model">{{if $disk.ModelName}}{{$disk.ModelName}}{{else}}{{maskSerial $disk.Device}}{{end}}</span>
           {{if $disk.SerialNumber}}<span class="disk-serial">{{maskSerial $disk.SerialNumber}}</span>{{end}}
           {{if gt0 $disk.CapacityBytes}}<span class="disk-cap">{{humanBytes $disk.CapacityBytes}}</span>{{end}}
           <span class="disk-type-badge {{diskTypeClass $disk.Interface $disk.RotationRate}}">{{diskTypeLabel $disk.Interface $disk.RotationRate}}</span>
           {{if gt0 $disk.Temperature}}<span class="disk-temp {{tempClass $disk.Temperature}}">{{printf "%.0f" $disk.Temperature}}°C</span>{{end}}
           <span class="disk-smart {{if $disk.SmartPassed}}pass{{else}}fail{{end}}">{{if $disk.SmartPassed}}PASS{{else}}FAIL{{end}}</span>
-          {{if gt0 $disk.PowerOnHours}}<span class="disk-hours">{{printf "%.0f" $disk.PowerOnHours}}h</span>{{end}}
+          {{if gt0 $disk.PowerOnHours}}<span class="disk-hours">{{fmtHours $disk.PowerOnHours}}</span>{{end}}
+          <span class="disk-expand-hint">▾</span>
+        </div>
+        <div class="disk-detail" id="disk-detail-{{$ni}}-{{$di}}">
+          <!-- Temperature -->
+          <div>
+            <div class="disk-detail-section-label">Temperature</div>
+            {{if gt0 $disk.Temperature}}
+            {{$maxTemp := 70.0}}
+            {{if gt0 $disk.TempTrip}}{{$maxTemp = $disk.TempTrip}}{{end}}
+            <div class="disk-temp-current {{tempClass $disk.Temperature}}">{{printf "%.0f" $disk.Temperature}}°C</div>
+            <div class="temp-gauge-wrap">
+              <div class="temp-gauge-track">
+                <div class="temp-gauge-fill {{tempClass $disk.Temperature}}"
+                     style="width:{{tempBarPct $disk.Temperature $maxTemp}}%"></div>
+                {{if gt0 $disk.TempTrip}}
+                <div class="temp-gauge-trip" style="left:{{tempBarPct $disk.TempTrip $maxTemp}}%"></div>
+                {{end}}
+              </div>
+              <div class="temp-gauge-labels">
+                <span>0°C</span>
+                {{if gt0 $disk.TempTrip}}<span style="color:var(--error)">Trip {{printf "%.0f" $disk.TempTrip}}°C</span>{{end}}
+                <span>{{printf "%.0f" $maxTemp}}°C</span>
+              </div>
+            </div>
+            {{if or (gt0 $disk.TempMin) (gt0 $disk.TempMax)}}
+            <div class="temp-lifetime">
+              Lifetime:
+              {{if gt0 $disk.TempMin}}{{printf "%.0f" $disk.TempMin}}°C{{end}}
+              {{if and (gt0 $disk.TempMin) (gt0 $disk.TempMax)}} – {{end}}
+              {{if gt0 $disk.TempMax}}{{printf "%.0f" $disk.TempMax}}°C{{end}}
+            </div>
+            {{end}}
+            {{else}}
+            <div style="font-size:var(--text-xs);color:var(--text-faint)">No temperature data</div>
+            {{end}}
+          </div>
+          <!-- Drive info -->
+          <div>
+            <div class="disk-detail-section-label">Drive Info</div>
+            <div class="disk-info-grid">
+              {{if $disk.FirmwareVersion}}<span class="disk-info-key">Firmware</span><span class="disk-info-val">{{$disk.FirmwareVersion}}</span>{{end}}
+              {{if $disk.FormFactor}}<span class="disk-info-key">Form Factor</span><span class="disk-info-val">{{$disk.FormFactor}}</span>{{end}}
+              {{if $disk.Interface}}<span class="disk-info-key">Interface</span><span class="disk-info-val">{{$disk.Interface}}</span>{{end}}
+              {{if gt $disk.RotationRate 0}}<span class="disk-info-key">RPM</span><span class="disk-info-val">{{$disk.RotationRate}}</span>{{end}}
+              {{if gt0 $disk.PowerOnHours}}<span class="disk-info-key">Power On</span><span class="disk-info-val">{{fmtHours $disk.PowerOnHours}} ({{printf "%.0f" $disk.PowerOnHours}}h)</span>{{end}}
+              <span class="disk-info-key">SMART</span><span class="disk-smart {{if $disk.SmartPassed}}pass{{else}}fail{{end}}">{{if $disk.SmartPassed}}PASSED{{else}}FAILED{{end}}</span>
+            </div>
+          </div>
         </div>
         {{end}}
       </div>
@@ -1238,6 +1348,25 @@ button:focus-visible,
       toggle.setAttribute('aria-expanded', String(nowOpen));
       list.classList.toggle('open', nowOpen);
       if (chevron) chevron.classList.toggle('open', nowOpen);
+    });
+  });
+
+  /* ── Disk row expand ─────────────────────────────── */
+  document.querySelectorAll('[id^="disk-row-"]').forEach(function (row) {
+    const suffix = row.id.replace('disk-row-', '');
+    const detail = document.getElementById('disk-detail-' + suffix);
+    const hint   = row.querySelector('.disk-expand-hint');
+    if (!detail) return;
+    function toggle() {
+      const nowOpen = row.getAttribute('aria-expanded') !== 'true';
+      row.setAttribute('aria-expanded', String(nowOpen));
+      detail.classList.toggle('open', nowOpen);
+      if (hint) hint.textContent = nowOpen ? '▴' : '▾';
+      row.classList.toggle('disk-row-open', nowOpen);
+    }
+    row.addEventListener('click', toggle);
+    row.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
     });
   });
 

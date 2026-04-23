@@ -61,16 +61,20 @@ type Dataset struct {
 
 // DiskInfo holds key SMART metrics for one physical disk.
 type DiskInfo struct {
-	Device       string  `json:"device"`
-	ModelName    string  `json:"model_name,omitempty"`
-	SerialNumber string  `json:"serial_number,omitempty"`
-	Interface    string  `json:"interface,omitempty"`   // "sat", "nvme", "scsi"
-	FormFactor   string  `json:"form_factor,omitempty"` // "3.5 inches", ""
-	Temperature  float64 `json:"temperature"`           // °C, 0 if unknown
-	SmartPassed  bool    `json:"smart_passed"`
-	PowerOnHours float64 `json:"power_on_hours"`
-	CapacityBytes float64 `json:"capacity_bytes"`
-	RotationRate int     `json:"rotation_rate"` // RPM; 0 = SSD/NVMe
+	Device          string  `json:"device"`
+	ModelName       string  `json:"model_name,omitempty"`
+	SerialNumber    string  `json:"serial_number,omitempty"`
+	FirmwareVersion string  `json:"firmware_version,omitempty"`
+	Interface       string  `json:"interface,omitempty"`   // "sat", "nvme", "scsi"
+	FormFactor      string  `json:"form_factor,omitempty"` // "3.5 inches", ""
+	Temperature     float64 `json:"temperature"`           // °C current, 0 if unknown
+	TempMin         float64 `json:"temp_min,omitempty"`    // lifetime min °C
+	TempMax         float64 `json:"temp_max,omitempty"`    // lifetime max °C
+	TempTrip        float64 `json:"temp_trip,omitempty"`   // hardware trip/critical °C
+	SmartPassed     bool    `json:"smart_passed"`
+	PowerOnHours    float64 `json:"power_on_hours"`
+	CapacityBytes   float64 `json:"capacity_bytes"`
+	RotationRate    int     `json:"rotation_rate"` // RPM; 0 = SSD/NVMe
 }
 
 // ExporterInfo holds metadata from zfs_exporter_build_info.
@@ -154,6 +158,9 @@ func ExtractDisks(samples []parser.Sample) []DiskInfo {
 			if d.SerialNumber == "" {
 				d.SerialNumber = s.Labels["serial_number"]
 			}
+			if d.FirmwareVersion == "" {
+				d.FirmwareVersion = s.Labels["firmware_version"]
+			}
 			if d.Interface == "" {
 				d.Interface = s.Labels["interface"]
 			}
@@ -161,8 +168,20 @@ func ExtractDisks(samples []parser.Sample) []DiskInfo {
 				d.FormFactor = s.Labels["form_factor"]
 			}
 		case "smartctl_device_temperature":
-			if s.Labels["temperature_type"] == "current" {
-				ensure(device).Temperature = s.Value
+			d := ensure(device)
+			switch s.Labels["temperature_type"] {
+			case "current":
+				d.Temperature = s.Value
+			case "drive_trip":
+				d.TempTrip = s.Value
+			case "lifetime_min":
+				if d.TempMin == 0 || s.Value < d.TempMin {
+					d.TempMin = s.Value
+				}
+			case "lifetime_max":
+				if d.TempMax == 0 || s.Value > d.TempMax {
+					d.TempMax = s.Value
+				}
 			}
 		case "smartctl_device_smart_status":
 			d := ensure(device)

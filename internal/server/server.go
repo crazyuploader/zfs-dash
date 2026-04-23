@@ -456,6 +456,32 @@ func funcMap() template.FuncMap {
 			b, _ := json.Marshal(v)
 			return string(b)
 		},
+		"tempBarPct": func(temp, maxTemp float64) string {
+			if maxTemp <= 0 {
+				maxTemp = 70
+			}
+			pct := (temp / maxTemp) * 100
+			if pct > 100 {
+				pct = 100
+			} else if pct < 0 {
+				pct = 0
+			}
+			return fmt.Sprintf("%.1f", pct)
+		},
+		"fmtHours": func(h float64) string {
+			total := int(h)
+			days := total / 24
+			hrs := total % 24
+			if days >= 365 {
+				y := days / 365
+				d := days % 365
+				return fmt.Sprintf("%dy %dd", y, d)
+			}
+			if days > 0 {
+				return fmt.Sprintf("%dd %dh", days, hrs)
+			}
+			return fmt.Sprintf("%dh", total)
+		},
 		"maskSerial": func(s string) string {
 			const maskLen = 5
 			if len(s) <= maskLen {
