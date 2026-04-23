@@ -233,15 +233,25 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 .node { margin-bottom: var(--space-8); }
 .node:last-child { margin-bottom: 0; }
 .node-head {
-  display: flex; align-items: flex-start; gap: var(--space-3);
+  display: flex; align-items: center; gap: var(--space-3);
   padding-bottom: var(--space-3); margin-bottom: var(--space-4);
   border-bottom: 1px solid var(--border);
 }
 .node-icon-wrap {
-  width: 30px; height: 30px; border-radius: var(--radius-md);
-  background: var(--primary-dim); color: var(--primary);
-  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-  margin-top: 3px;
+  width: 32px; height: 32px; border-radius: var(--radius-md);
+  background: var(--primary-dim);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; align-self: center;
+}
+.node-prompt {
+  font-family: var(--font-mono); font-size: 1.1rem; font-weight: 700;
+  color: var(--primary); line-height: 1;
+  animation: prompt-pulse 2s ease-in-out infinite;
+  user-select: none; display: flex; align-items: center; justify-content: center;
+}
+@keyframes prompt-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
 }
 .node-label-row { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 .node-label { font-size: var(--text-base); font-weight: 600; letter-spacing: -0.01em; }
@@ -958,13 +968,7 @@ button:focus-visible,
 
     <div class="node-head">
       <div class="node-icon-wrap" aria-hidden="true">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="2" y="2"  width="20" height="8" rx="1.5"/>
-          <rect x="2" y="14" width="20" height="8" rx="1.5"/>
-          <circle cx="6" cy="6"  r="1" fill="currentColor" stroke="none"/>
-          <circle cx="6" cy="18" r="1" fill="currentColor" stroke="none"/>
-        </svg>
+        <span class="node-prompt">›</span>
       </div>
       <div class="node-meta">
         <div class="node-label-row">
