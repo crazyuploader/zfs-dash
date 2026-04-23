@@ -1259,7 +1259,27 @@ button:focus-visible,
     if (pct < 100) requestAnimationFrame(tickBar);
   }
   requestAnimationFrame(tickBar);
-  setTimeout(function () { location.reload(); }, REFRESH_MS);
+
+  // Fallback full-page reload
+  const reloadTimer = setTimeout(function () { location.reload(); }, REFRESH_MS);
+
+  /* ── Real-time SSE ───────────────────────────────── */
+  function connectSSE() {
+    const es = new EventSource('/events');
+
+    es.onmessage = function(e) {
+      if (e.data === 'refresh') {
+        clearTimeout(reloadTimer);
+        location.reload();
+      }
+    };
+
+    es.onerror = function() {
+      es.close();
+      setTimeout(connectSSE, 5000);
+    };
+  }
+  connectSSE();
 
   /* Live clock in topbar */
   const tsEl = document.getElementById('ts');

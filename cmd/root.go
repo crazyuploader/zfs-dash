@@ -38,12 +38,16 @@ func init() {
 	rootCmd.PersistentFlags().Int("refresh", 300, "auto-refresh interval in seconds")
 	rootCmd.PersistentFlags().Bool("debug", false, "enable debug logging")
 	rootCmd.PersistentFlags().StringSlice("trusted-proxies", nil, "list of trusted proxy IPs")
+	rootCmd.PersistentFlags().Float64("max-usage-percent", 0, "usage threshold for health failure (0 to disable)")
+	rootCmd.PersistentFlags().String("log-format", "text", "log format (text or json)")
 
 	_ = viper.BindPFlag("endpoints", rootCmd.PersistentFlags().Lookup("endpoints"))
 	_ = viper.BindPFlag("addr", rootCmd.PersistentFlags().Lookup("addr"))
 	_ = viper.BindPFlag("refresh", rootCmd.PersistentFlags().Lookup("refresh"))
 	_ = viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
 	_ = viper.BindPFlag("trusted_proxies", rootCmd.PersistentFlags().Lookup("trusted-proxies"))
+	_ = viper.BindPFlag("max_usage_percent", rootCmd.PersistentFlags().Lookup("max-usage-percent"))
+	_ = viper.BindPFlag("log_format", rootCmd.PersistentFlags().Lookup("log-format"))
 }
 
 func initConfig() {

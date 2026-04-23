@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
@@ -59,9 +60,7 @@ func (f *Fetcher) CacheInfo() (expiresAt time.Time, ttl time.Duration) {
 func (f *Fetcher) FetchAll(ctx context.Context) ([]model.NodeData, bool) {
 	f.mu.RLock()
 	if time.Now().Before(f.expiresAt) {
-		if f.Debug {
-			fmt.Printf("DEBUG: cache HIT (expires in %v)\n", time.Until(f.expiresAt).Round(time.Second))
-		}
+		slog.Debug("cache HIT", "expires_in", time.Until(f.expiresAt).Round(time.Second))
 		data := f.cache
 		f.mu.RUnlock()
 		return data, true
@@ -77,9 +76,7 @@ func (f *Fetcher) FetchAll(ctx context.Context) ([]model.NodeData, bool) {
 		return f.cache, true
 	}
 
-	if f.Debug {
-		fmt.Printf("DEBUG: cache MISS, fetching metrics from %d endpoints\n", len(f.endpoints))
-	}
+	slog.Debug("cache MISS", "endpoints", len(f.endpoints))
 	results := make([]model.NodeData, len(f.endpoints))
 	var wg sync.WaitGroup
 	for i, ep := range f.endpoints {
@@ -97,9 +94,7 @@ func (f *Fetcher) FetchAll(ctx context.Context) ([]model.NodeData, bool) {
 }
 
 func (f *Fetcher) fetchOne(ctx context.Context, ep config.Endpoint) model.NodeData {
-	if f.Debug {
-		fmt.Printf("DEBUG: fetching from %s (%s)\n", ep.Label, ep.URL)
-	}
+	slog.Debug("fetching metrics", "label", ep.Label, "url", ep.URL)
 	nd := model.NodeData{
 		Label:     ep.Label,
 		Location:  ep.Location,
@@ -115,18 +110,14 @@ func (f *Fetcher) fetchOne(ctx context.Context, ep config.Endpoint) model.NodeDa
 	resp, err := f.client.Do(req)
 	if err != nil {
 		nd.Error = fmt.Sprintf("unreachable: %v", err)
-		if f.Debug {
-			fmt.Printf("DEBUG: %s unreachable: %v\n", ep.Label, err)
-		}
+		slog.Debug("fetch failed", "label", ep.Label, "error", err)
 		return nd
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		nd.Error = fmt.Sprintf("HTTP %d", resp.StatusCode)
-		if f.Debug {
-			fmt.Printf("DEBUG: %s returned HTTP %d\n", ep.Label, resp.StatusCode)
-		}
+		slog.Debug("fetch failed", "label", ep.Label, "status", resp.StatusCode)
 		return nd
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
@@ -138,20 +129,14 @@ func (f *Fetcher) fetchOne(ctx context.Context, ep config.Endpoint) model.NodeDa
 		nd.Error = fmt.Sprintf("response too large: limit %d bytes", maxResponseBytes)
 		return nd
 	}
-	if f.Debug {
-		fmt.Printf("DEBUG: %s read %d bytes\n", ep.Label, len(body))
-	}
+	slog.Debug("read metrics", "label", ep.Label, "bytes", len(body))
 	samples, err := parser.Parse(bytes.NewReader(body))
 	if err != nil {
 		nd.Error = fmt.Sprintf("parse: %v", err)
-		if f.Debug {
-			fmt.Printf("DEBUG: %s parse error: %v\n", ep.Label, err)
-		}
+		slog.Debug("parse failed", "label", ep.Label, "error", err)
 		return nd
 	}
 	nd.Pools = model.ExtractPools(samples)
-	if f.Debug {
-		fmt.Printf("DEBUG: %s extracted %d pools\n", ep.Label, len(nd.Pools))
-	}
+	slog.Debug("extracted pools", "label", ep.Label, "count", len(nd.Pools))
 	return nd
 }
