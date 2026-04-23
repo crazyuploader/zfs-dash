@@ -8,11 +8,12 @@ import (
 	"github.com/spf13/viper"
 )
 
-// Endpoint is a single ZFS exporter target.
+// Endpoint is a single ZFS exporter target with an optional smartctl exporter.
 type Endpoint struct {
-	URL      string `mapstructure:"url"`
-	Label    string `mapstructure:"label"`
-	Location string `mapstructure:"location"`
+	URL         string `mapstructure:"url"`
+	Label       string `mapstructure:"label"`
+	Location    string `mapstructure:"location"`
+	SmartctlURL string `mapstructure:"smartctl_url"` // optional; omit to skip disk metrics
 }
 
 // Config holds all runtime options.

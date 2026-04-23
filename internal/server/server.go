@@ -61,6 +61,7 @@ type nodeView struct {
 	Location     string             `json:"location,omitempty"`
 	ExporterInfo model.ExporterInfo `json:"exporter_info,omitempty"`
 	Pools        []model.Pool       `json:"pools"`
+	Disks        []model.DiskInfo   `json:"disks,omitempty"`
 }
 
 // templateData is the data passed to the HTML template.
@@ -258,7 +259,7 @@ func setupLogger(cfg *config.Config) {
 func buildTemplateData(nodes []model.NodeData, cfg *config.Config) templateData {
 	views := make([]nodeView, len(nodes))
 	for i, n := range nodes {
-		views[i] = nodeView{Label: n.Label, Location: n.Location, ExporterInfo: n.ExporterInfo, Pools: n.Pools}
+		views[i] = nodeView{Label: n.Label, Location: n.Location, ExporterInfo: n.ExporterInfo, Pools: n.Pools, Disks: n.Disks}
 	}
 	nodesJSON, _ := json.Marshal(views)
 
@@ -454,6 +455,43 @@ func funcMap() template.FuncMap {
 		"toJSON": func(v any) string {
 			b, _ := json.Marshal(v)
 			return string(b)
+		},
+		"maskSerial": func(s string) string {
+			const maskLen = 5
+			if len(s) <= maskLen {
+				return strings.Repeat("x", len(s))
+			}
+			return s[:len(s)-maskLen] + strings.Repeat("x", maskLen)
+		},
+		"diskTypeLabel": func(iface string, rpm int) string {
+			switch {
+			case iface == "nvme":
+				return "NVMe"
+			case rpm > 0:
+				return "HDD"
+			default:
+				return "SSD"
+			}
+		},
+		"diskTypeClass": func(iface string, rpm int) string {
+			switch {
+			case iface == "nvme":
+				return "nvme"
+			case rpm > 0:
+				return "hdd"
+			default:
+				return "ssd"
+			}
+		},
+		"tempClass": func(c float64) string {
+			switch {
+			case c > 55:
+				return "hot"
+			case c > 45:
+				return "warm"
+			default:
+				return "cool"
+			}
 		},
 		"gt0":    func(f float64) bool { return f > 0 },
 		"gte":    func(a, b float64) bool { return a >= b },

@@ -291,6 +291,54 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   white-space: nowrap; line-height: 1.6;
 }
 
+/* ── Disk Section ────────────────────────────────────── */
+.disk-section {
+  margin-top: var(--space-4);
+  border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden;
+}
+.disk-toggle {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer; transition: background var(--transition);
+}
+.disk-toggle:hover { background: var(--surface-3); }
+.disk-toggle-label {
+  display: flex; align-items: center; gap: var(--space-2);
+  font-size: var(--text-xs); font-weight: 500; color: var(--text-muted);
+}
+.disk-chevron { transition: transform var(--transition); color: var(--text-faint); flex-shrink: 0; }
+.disk-chevron.open { transform: rotate(180deg); }
+.disk-list { display: none; }
+.disk-list.open { display: block; }
+.disk-row {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-4); border-top: 1px solid var(--border);
+  font-size: var(--text-xs); font-family: var(--font-mono);
+  transition: background var(--transition);
+}
+.disk-row:hover { background: var(--surface-2); }
+.disk-model { flex: 1; min-width: 120px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.disk-serial { color: var(--text-faint); white-space: nowrap; }
+.disk-cap { color: var(--text-muted); white-space: nowrap; }
+.disk-type-badge {
+  font-size: 0.58rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  padding: 1px 5px; border-radius: var(--radius-sm); white-space: nowrap;
+  background: var(--surface-3); color: var(--text-faint);
+}
+.disk-type-badge.nvme { background: color-mix(in oklab, var(--primary) 12%, transparent); color: var(--primary); }
+.disk-type-badge.ssd  { background: color-mix(in oklab, var(--success) 10%, transparent); color: var(--success); }
+.disk-temp { white-space: nowrap; font-weight: 600; }
+.disk-temp.cool { color: var(--success); }
+.disk-temp.warm { color: var(--warning); }
+.disk-temp.hot  { color: var(--error); }
+.disk-smart {
+  font-size: 0.58rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  padding: 1px 5px; border-radius: var(--radius-sm); white-space: nowrap;
+}
+.disk-smart.pass { background: var(--success-dim); color: var(--success); }
+.disk-smart.fail { background: var(--error-dim);   color: var(--error); }
+.disk-hours { color: var(--text-faint); white-space: nowrap; }
+
 /* ── Error Banner ────────────────────────────────────── */
 .node-err {
   background: var(--error-dim); border: 1px solid color-mix(in oklab, var(--error) 30%, transparent);
@@ -1004,6 +1052,40 @@ button:focus-visible,
     </div>
     {{end}}
 
+    {{if $node.Disks}}
+    <div class="disk-section">
+      <button class="disk-toggle" id="disk-toggle-{{$ni}}"
+              aria-expanded="false" aria-controls="disk-list-{{$ni}}">
+        <div class="disk-toggle-label">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <ellipse cx="12" cy="5" rx="9" ry="3"/>
+            <path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/>
+            <path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/>
+          </svg>
+          Disks ({{len $node.Disks}})
+        </div>
+        <svg class="disk-chevron" id="disk-chevron-{{$ni}}" width="14" height="14"
+             viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="m6 9 6 6 6-6"/>
+        </svg>
+      </button>
+      <div class="disk-list" id="disk-list-{{$ni}}">
+        {{range $disk := $node.Disks}}
+        <div class="disk-row">
+          <span class="disk-model">{{if $disk.ModelName}}{{$disk.ModelName}}{{else}}{{maskSerial $disk.Device}}{{end}}</span>
+          {{if $disk.SerialNumber}}<span class="disk-serial">{{maskSerial $disk.SerialNumber}}</span>{{end}}
+          {{if gt0 $disk.CapacityBytes}}<span class="disk-cap">{{humanBytes $disk.CapacityBytes}}</span>{{end}}
+          <span class="disk-type-badge {{diskTypeClass $disk.Interface $disk.RotationRate}}">{{diskTypeLabel $disk.Interface $disk.RotationRate}}</span>
+          {{if gt0 $disk.Temperature}}<span class="disk-temp {{tempClass $disk.Temperature}}">{{printf "%.0f" $disk.Temperature}}°C</span>{{end}}
+          <span class="disk-smart {{if $disk.SmartPassed}}pass{{else}}fail{{end}}">{{if $disk.SmartPassed}}PASS{{else}}FAIL{{end}}</span>
+          {{if gt0 $disk.PowerOnHours}}<span class="disk-hours">{{printf "%.0f" $disk.PowerOnHours}}h</span>{{end}}
+        </div>
+        {{end}}
+      </div>
+    </div>
+    {{end}}
+
   </section>
   {{end}}
   {{end}}
@@ -1165,6 +1247,20 @@ button:focus-visible,
       body.classList.toggle('collapsed', !nowOpen);
       if (arrow)   arrow.classList.toggle('open', nowOpen);
       if (divider) divider.classList.toggle('hidden', !nowOpen);
+    });
+  });
+
+  /* ── Disk section toggles ────────────────────────── */
+  document.querySelectorAll('[id^="disk-toggle-"]').forEach(function (toggle) {
+    const idx     = toggle.id.replace('disk-toggle-', '');
+    const list    = document.getElementById('disk-list-' + idx);
+    const chevron = document.getElementById('disk-chevron-' + idx);
+    if (!list) return;
+    toggle.addEventListener('click', function () {
+      const nowOpen = toggle.getAttribute('aria-expanded') !== 'true';
+      toggle.setAttribute('aria-expanded', String(nowOpen));
+      list.classList.toggle('open', nowOpen);
+      if (chevron) chevron.classList.toggle('open', nowOpen);
     });
   });
 

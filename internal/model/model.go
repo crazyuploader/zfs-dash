@@ -59,6 +59,20 @@ type Dataset struct {
 	VolumeUsedPercent float64 `json:"volume_used_percent"`
 }
 
+// DiskInfo holds key SMART metrics for one physical disk.
+type DiskInfo struct {
+	Device       string  `json:"device"`
+	ModelName    string  `json:"model_name,omitempty"`
+	SerialNumber string  `json:"serial_number,omitempty"`
+	Interface    string  `json:"interface,omitempty"`   // "sat", "nvme", "scsi"
+	FormFactor   string  `json:"form_factor,omitempty"` // "3.5 inches", ""
+	Temperature  float64 `json:"temperature"`           // °C, 0 if unknown
+	SmartPassed  bool    `json:"smart_passed"`
+	PowerOnHours float64 `json:"power_on_hours"`
+	CapacityBytes float64 `json:"capacity_bytes"`
+	RotationRate int     `json:"rotation_rate"` // RPM; 0 = SSD/NVMe
+}
+
 // ExporterInfo holds metadata from zfs_exporter_build_info.
 type ExporterInfo struct {
 	Version   string `json:"version,omitempty"`
@@ -75,6 +89,7 @@ type NodeData struct {
 	Error        string       `json:"error,omitempty"`
 	ExporterInfo ExporterInfo `json:"exporter_info,omitempty"`
 	Pools        []Pool       `json:"pools"`
+	Disks        []DiskInfo   `json:"disks,omitempty"`
 }
 
 func healthFromValue(v float64) PoolHealth {
@@ -110,6 +125,69 @@ func ExtractExporterInfo(samples []parser.Sample) ExporterInfo {
 		}
 	}
 	return ExporterInfo{}
+}
+
+// ExtractDisks builds DiskInfo structs from smartctl_exporter Prometheus samples.
+// The mapping between pool and disk is not available in the metrics, so disks
+// are returned at node level only.
+func ExtractDisks(samples []parser.Sample) []DiskInfo {
+	disks := map[string]*DiskInfo{}
+
+	ensure := func(device string) *DiskInfo {
+		if _, ok := disks[device]; !ok {
+			disks[device] = &DiskInfo{Device: device, SmartPassed: true}
+		}
+		return disks[device]
+	}
+
+	for _, s := range samples {
+		device := s.Labels["device"]
+		if device == "" {
+			continue
+		}
+		switch s.Name {
+		case "smartctl_device":
+			d := ensure(device)
+			if d.ModelName == "" {
+				d.ModelName = s.Labels["model_name"]
+			}
+			if d.SerialNumber == "" {
+				d.SerialNumber = s.Labels["serial_number"]
+			}
+			if d.Interface == "" {
+				d.Interface = s.Labels["interface"]
+			}
+			if d.FormFactor == "" {
+				d.FormFactor = s.Labels["form_factor"]
+			}
+		case "smartctl_device_temperature":
+			if s.Labels["temperature_type"] == "current" {
+				ensure(device).Temperature = s.Value
+			}
+		case "smartctl_device_smart_status":
+			d := ensure(device)
+			d.SmartPassed = s.Value == 1
+		case "smartctl_device_power_on_seconds":
+			ensure(device).PowerOnHours = s.Value / 3600
+		case "smartctl_device_capacity_bytes":
+			ensure(device).CapacityBytes = s.Value
+		case "smartctl_device_rotation_rate":
+			ensure(device).RotationRate = int(math.Round(s.Value))
+		}
+	}
+
+	if len(disks) == 0 {
+		return nil
+	}
+
+	result := make([]DiskInfo, 0, len(disks))
+	for _, d := range disks {
+		result = append(result, *d)
+	}
+	slices.SortFunc(result, func(a, b DiskInfo) int {
+		return strings.Compare(a.Device, b.Device)
+	})
+	return result
 }
 
 // ExtractPools builds Pool structs from a flat Prometheus sample slice.

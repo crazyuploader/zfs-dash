@@ -100,6 +100,41 @@ func (f *Fetcher) FetchAll(ctx context.Context) ([]model.NodeData, bool) {
 	return append([]model.NodeData{}, results...), false
 }
 
+// fetchRaw fetches and parses Prometheus text-format metrics from a single URL.
+func (f *Fetcher) fetchRaw(ctx context.Context, label, url string) ([]parser.Sample, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build request: %w", err)
+	}
+	resp, err := f.client.Do(req)
+	if err != nil {
+		slog.Warn("fetch failed", "label", label, "url", url, "error", err)
+		return nil, fmt.Errorf("unreachable: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		slog.Warn("fetch failed", "label", label, "url", url, "status", resp.StatusCode)
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
+	if err != nil {
+		slog.Warn("fetch read error", "label", label, "url", url, "error", err)
+		return nil, fmt.Errorf("read: %w", err)
+	}
+	if len(body) > maxResponseBytes {
+		slog.Warn("fetch response too large", "label", label, "url", url, "limit", maxResponseBytes)
+		return nil, fmt.Errorf("response too large: limit %d bytes", maxResponseBytes)
+	}
+	slog.Debug("read metrics", "label", label, "url", url, "bytes", len(body))
+	samples, err := parser.Parse(bytes.NewReader(body))
+	if err != nil {
+		slog.Warn("parse failed", "label", label, "url", url, "error", err)
+		return nil, fmt.Errorf("parse: %w", err)
+	}
+	return samples, nil
+}
+
 func (f *Fetcher) fetchOne(ctx context.Context, ep config.Endpoint) model.NodeData {
 	slog.Debug("fetching metrics", "label", ep.Label, "url", ep.URL)
 	nd := model.NodeData{
@@ -109,44 +144,42 @@ func (f *Fetcher) fetchOne(ctx context.Context, ep config.Endpoint) model.NodeDa
 		FetchedAt: time.Now(),
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ep.URL, nil)
-	if err != nil {
-		nd.Error = fmt.Sprintf("build request: %v", err)
-		return nd
-	}
-	resp, err := f.client.Do(req)
-	if err != nil {
-		nd.Error = fmt.Sprintf("unreachable: %v", err)
-		slog.Warn("fetch failed", "label", ep.Label, "error", err)
-		return nd
-	}
-	defer func() { _ = resp.Body.Close() }()
+	var (
+		zfsSamples      []parser.Sample
+		smartctlSamples []parser.Sample
+		zfsErr          error
+	)
 
-	if resp.StatusCode != http.StatusOK {
-		nd.Error = fmt.Sprintf("HTTP %d", resp.StatusCode)
-		slog.Warn("fetch failed", "label", ep.Label, "status", resp.StatusCode)
+	if ep.SmartctlURL != "" {
+		// Fetch ZFS and smartctl concurrently; smartctl failure is non-fatal.
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			zfsSamples, zfsErr = f.fetchRaw(ctx, ep.Label, ep.URL)
+		}()
+		go func() {
+			defer wg.Done()
+			var err error
+			smartctlSamples, err = f.fetchRaw(ctx, ep.Label, ep.SmartctlURL)
+			if err != nil {
+				slog.Warn("smartctl fetch failed (disk data unavailable)", "label", ep.Label, "error", err)
+			}
+		}()
+		wg.Wait()
+	} else {
+		zfsSamples, zfsErr = f.fetchRaw(ctx, ep.Label, ep.URL)
+	}
+
+	if zfsErr != nil {
+		nd.Error = zfsErr.Error()
 		return nd
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
-	if err != nil {
-		nd.Error = fmt.Sprintf("read: %v", err)
-		slog.Warn("fetch read error", "label", ep.Label, "error", err)
-		return nd
-	}
-	if len(body) > maxResponseBytes {
-		nd.Error = fmt.Sprintf("response too large: limit %d bytes", maxResponseBytes)
-		slog.Warn("fetch response too large", "label", ep.Label, "limit", maxResponseBytes)
-		return nd
-	}
-	slog.Debug("read metrics", "label", ep.Label, "bytes", len(body))
-	samples, err := parser.Parse(bytes.NewReader(body))
-	if err != nil {
-		nd.Error = fmt.Sprintf("parse: %v", err)
-		slog.Warn("parse failed", "label", ep.Label, "error", err)
-		return nd
-	}
-	nd.Pools = model.ExtractPools(samples)
-	nd.ExporterInfo = model.ExtractExporterInfo(samples)
-	slog.Debug("extracted pools", "label", ep.Label, "count", len(nd.Pools))
+
+	allSamples := append(zfsSamples, smartctlSamples...)
+	nd.Pools = model.ExtractPools(allSamples)
+	nd.ExporterInfo = model.ExtractExporterInfo(allSamples)
+	nd.Disks = model.ExtractDisks(allSamples)
+	slog.Debug("extracted pools", "label", ep.Label, "count", len(nd.Pools), "disks", len(nd.Disks))
 	return nd
 }
