@@ -57,10 +57,10 @@ const (
 // nodeView is the subset of NodeData serialized into the page's inline JS.
 // URL is intentionally excluded to avoid exposing internal scrape endpoints to browsers.
 type nodeView struct {
-	Label        string            `json:"label"`
-	Location     string            `json:"location,omitempty"`
+	Label        string             `json:"label"`
+	Location     string             `json:"location,omitempty"`
 	ExporterInfo model.ExporterInfo `json:"exporter_info,omitempty"`
-	Pools        []model.Pool      `json:"pools"`
+	Pools        []model.Pool       `json:"pools"`
 }
 
 // templateData is the data passed to the HTML template.
