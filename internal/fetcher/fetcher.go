@@ -24,14 +24,13 @@ type Fetcher struct {
 	client    *http.Client
 	mu        sync.RWMutex
 	endpoints []config.Endpoint
-	Debug     bool
 	cacheTTL  time.Duration
 	cache     []model.NodeData
 	expiresAt time.Time
 }
 
 // New creates a Fetcher for the provided endpoints.
-func New(endpoints []config.Endpoint, debug bool, cacheTTL time.Duration) *Fetcher {
+func New(endpoints []config.Endpoint, cacheTTL time.Duration) *Fetcher {
 	return &Fetcher{
 		client: &http.Client{
 			Timeout: fetchTimeout,
@@ -41,7 +40,6 @@ func New(endpoints []config.Endpoint, debug bool, cacheTTL time.Duration) *Fetch
 			},
 		},
 		endpoints: endpoints,
-		Debug:     debug,
 		cacheTTL:  cacheTTL,
 	}
 }
@@ -67,7 +65,8 @@ func (f *Fetcher) FetchAll(ctx context.Context) ([]model.NodeData, bool) {
 	f.mu.RLock()
 	if time.Now().Before(f.expiresAt) {
 		slog.Debug("cache HIT", "expires_in", time.Until(f.expiresAt).Round(time.Second))
-		data := f.cache
+		// Return a copy so callers cannot mutate cached data.
+		data := append([]model.NodeData{}, f.cache...)
 		f.mu.RUnlock()
 		return data, true
 	}
@@ -79,7 +78,8 @@ func (f *Fetcher) FetchAll(ctx context.Context) ([]model.NodeData, bool) {
 
 	// Re-check after acquiring write lock
 	if time.Now().Before(f.expiresAt) {
-		return f.cache, true
+		// Return a copy so callers cannot mutate cached data.
+		return append([]model.NodeData{}, f.cache...), true
 	}
 
 	slog.Debug("cache MISS", "endpoints", len(f.endpoints))
@@ -96,7 +96,8 @@ func (f *Fetcher) FetchAll(ctx context.Context) ([]model.NodeData, bool) {
 
 	f.cache = results
 	f.expiresAt = time.Now().Add(f.cacheTTL)
-	return results, false
+	// Return a copy so callers cannot mutate cached data.
+	return append([]model.NodeData{}, results...), false
 }
 
 func (f *Fetcher) fetchOne(ctx context.Context, ep config.Endpoint) model.NodeData {
@@ -116,33 +117,36 @@ func (f *Fetcher) fetchOne(ctx context.Context, ep config.Endpoint) model.NodeDa
 	resp, err := f.client.Do(req)
 	if err != nil {
 		nd.Error = fmt.Sprintf("unreachable: %v", err)
-		slog.Debug("fetch failed", "label", ep.Label, "error", err)
+		slog.Warn("fetch failed", "label", ep.Label, "error", err)
 		return nd
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		nd.Error = fmt.Sprintf("HTTP %d", resp.StatusCode)
-		slog.Debug("fetch failed", "label", ep.Label, "status", resp.StatusCode)
+		slog.Warn("fetch failed", "label", ep.Label, "status", resp.StatusCode)
 		return nd
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
 	if err != nil {
 		nd.Error = fmt.Sprintf("read: %v", err)
+		slog.Warn("fetch read error", "label", ep.Label, "error", err)
 		return nd
 	}
 	if len(body) > maxResponseBytes {
 		nd.Error = fmt.Sprintf("response too large: limit %d bytes", maxResponseBytes)
+		slog.Warn("fetch response too large", "label", ep.Label, "limit", maxResponseBytes)
 		return nd
 	}
 	slog.Debug("read metrics", "label", ep.Label, "bytes", len(body))
 	samples, err := parser.Parse(bytes.NewReader(body))
 	if err != nil {
 		nd.Error = fmt.Sprintf("parse: %v", err)
-		slog.Debug("parse failed", "label", ep.Label, "error", err)
+		slog.Warn("parse failed", "label", ep.Label, "error", err)
 		return nd
 	}
 	nd.Pools = model.ExtractPools(samples)
+	nd.ExporterInfo = model.ExtractExporterInfo(samples)
 	slog.Debug("extracted pools", "label", ep.Label, "count", len(nd.Pools))
 	return nd
 }

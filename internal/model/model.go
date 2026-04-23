@@ -59,14 +59,22 @@ type Dataset struct {
 	VolumeUsedPercent float64 `json:"volume_used_percent"`
 }
 
+// ExporterInfo holds metadata from zfs_exporter_build_info.
+type ExporterInfo struct {
+	Version   string `json:"version,omitempty"`
+	GoVersion string `json:"go_version,omitempty"`
+	Revision  string `json:"revision,omitempty"`
+}
+
 // NodeData holds all pool data fetched from one endpoint.
 type NodeData struct {
-	Label     string    `json:"label"`
-	Location  string    `json:"location,omitempty"`
-	URL       string    `json:"url"`
-	FetchedAt time.Time `json:"fetched_at"`
-	Error     string    `json:"error,omitempty"`
-	Pools     []Pool    `json:"pools"`
+	Label        string       `json:"label"`
+	Location     string       `json:"location,omitempty"`
+	URL          string       `json:"url"`
+	FetchedAt    time.Time    `json:"fetched_at"`
+	Error        string       `json:"error,omitempty"`
+	ExporterInfo ExporterInfo `json:"exporter_info,omitempty"`
+	Pools        []Pool       `json:"pools"`
 }
 
 func healthFromValue(v float64) PoolHealth {
@@ -88,6 +96,20 @@ func healthFromValue(v float64) PoolHealth {
 	default:
 		return HealthUnknown
 	}
+}
+
+// ExtractExporterInfo extracts metadata from the zfs_exporter_build_info sample.
+func ExtractExporterInfo(samples []parser.Sample) ExporterInfo {
+	for _, s := range samples {
+		if s.Name == "zfs_exporter_build_info" {
+			return ExporterInfo{
+				Version:   s.Labels["version"],
+				GoVersion: s.Labels["goversion"],
+				Revision:  s.Labels["revision"],
+			}
+		}
+	}
+	return ExporterInfo{}
 }
 
 // ExtractPools builds Pool structs from a flat Prometheus sample slice.
@@ -213,13 +235,14 @@ func ExtractPools(samples []parser.Sample) []Pool {
 // HumanBytes returns a human-readable byte string (e.g. "3.72 TB").
 func HumanBytes(b float64) string {
 	const unit = 1024.0
+	units := []string{"KB", "MB", "GB", "TB", "PB", "EB"}
 	if b < unit {
 		return fmt.Sprintf("%.0f B", b)
 	}
 	div, exp := unit, 0
-	for n := b / unit; n >= unit; n /= unit {
+	for n := b / unit; n >= unit && exp < len(units)-1; n /= unit {
 		div *= unit
 		exp++
 	}
-	return fmt.Sprintf("%.2f %s", b/div, []string{"KB", "MB", "GB", "TB", "PB", "EB"}[exp])
+	return fmt.Sprintf("%.2f %s", b/div, units[exp])
 }

@@ -25,7 +25,7 @@ func TestFetcher_Cache(t *testing.T) {
 	}
 
 	// Cache TTL of 1 second
-	f := New(eps, false, 1*time.Second)
+	f := New(eps, 1*time.Second)
 	ctx := context.Background()
 
 	// First call - should hit the server
@@ -73,7 +73,7 @@ func TestFetcher_SetEndpoints(t *testing.T) {
 	}))
 	defer server2.Close()
 
-	f := New([]config.Endpoint{{URL: server1.URL, Label: "node1"}}, false, 1*time.Minute)
+	f := New([]config.Endpoint{{URL: server1.URL, Label: "node1"}}, 1*time.Minute)
 	ctx := context.Background()
 
 	// Initial fetch

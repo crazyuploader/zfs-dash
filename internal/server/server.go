@@ -22,11 +22,14 @@ import (
 	"github.com/crazyuploader/zfs-dash/internal/model"
 	"github.com/crazyuploader/zfs-dash/templates"
 	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/limiter"
 	"github.com/gofiber/fiber/v3/middleware/logger"
 )
 
+// Hub broadcasts reload signals to connected SSE clients.
+// clients is a sync.Map keyed by chan bool.
 type Hub struct {
-	clients sync.Map // map[chan bool]bool
+	clients sync.Map
 }
 
 func newHub() *Hub {
@@ -46,13 +49,24 @@ func (h *Hub) broadcast() {
 }
 
 const (
-	httpReadTimeout = 15 * time.Second
-	httpIdleTimeout = 60 * time.Second
+	httpReadTimeout    = 15 * time.Second
+	httpIdleTimeout    = 60 * time.Second
+	httpHandlerTimeout = 15 * time.Second
 )
+
+// nodeView is the subset of NodeData serialized into the page's inline JS.
+// URL is intentionally excluded to avoid exposing internal scrape endpoints to browsers.
+type nodeView struct {
+	Label        string            `json:"label"`
+	Location     string            `json:"location,omitempty"`
+	ExporterInfo model.ExporterInfo `json:"exporter_info,omitempty"`
+	Pools        []model.Pool      `json:"pools"`
+}
 
 // templateData is the data passed to the HTML template.
 type templateData struct {
 	Nodes            []model.NodeData
+	NodesJSON        template.JS // URL-stripped JSON for inline script
 	RefreshSecs      int
 	FetchedAt        string
 	TotalPools       int
@@ -72,7 +86,7 @@ func Start(cfg *config.Config) error {
 
 	slog.Debug("starting server in debug mode", "config", cfg)
 
-	f := fetcher.New(cfg.Endpoints, cfg.Debug, cfg.CacheTTL)
+	f := fetcher.New(cfg.Endpoints, cfg.CacheTTL)
 	hub := newHub()
 
 	// Hot-reload config on SIGHUP
@@ -88,7 +102,6 @@ func Start(cfg *config.Config) error {
 			}
 			setupLogger(newCfg)
 			f.SetEndpoints(newCfg.Endpoints)
-			f.Debug = newCfg.Debug
 			cfgPtr.Store(newCfg)
 			slog.Info("config reloaded successfully")
 		}
@@ -114,6 +127,19 @@ func Start(cfg *config.Config) error {
 	app.Use(logger.New(logger.Config{
 		Format: "[${time}] ${status} - ${latency} ${ips} ${method} ${path}\n",
 	}))
+
+	app.Use(func(c fiber.Ctx) error {
+		c.Set("X-Content-Type-Options", "nosniff")
+		c.Set("X-Frame-Options", "SAMEORIGIN")
+		c.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		c.Set("Content-Security-Policy", "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'")
+		return c.Next()
+	})
+
+	rl := limiter.New(limiter.Config{
+		Max:        60,
+		Expiration: 1 * time.Minute,
+	})
 
 	// SSE Endpoint
 	app.Get("/events", func(c fiber.Ctx) error {
@@ -161,8 +187,8 @@ func Start(cfg *config.Config) error {
 	})
 
 	// JSON API
-	app.Get("/api/metrics", func(c fiber.Ctx) error {
-		ctx, cancel := context.WithTimeout(c.Context(), 15*time.Second)
+	app.Get("/api/metrics", rl, func(c fiber.Ctx) error {
+		ctx, cancel := context.WithTimeout(c.Context(), httpHandlerTimeout)
 		defer cancel()
 		nodes, isCached := f.FetchAll(ctx)
 		if !isCached {
@@ -172,12 +198,12 @@ func Start(cfg *config.Config) error {
 		return c.JSON(nodes)
 	})
 
-	app.Get("/api/health/:label", func(c fiber.Ctx) error {
+	app.Get("/api/health/:label", rl, func(c fiber.Ctx) error {
 		curCfg := cfgPtr.Load()
 		return serveHealthCheck(c, f, c.Params("label"), "", curCfg)
 	})
 
-	app.Get("/api/health/:label/:pool", func(c fiber.Ctx) error {
+	app.Get("/api/health/:label/:pool", rl, func(c fiber.Ctx) error {
 		curCfg := cfgPtr.Load()
 		return serveHealthCheck(c, f, c.Params("label"), c.Params("pool"), curCfg)
 	})
@@ -185,7 +211,7 @@ func Start(cfg *config.Config) error {
 	// Dashboard
 	app.Get("/", func(c fiber.Ctx) error {
 		curCfg := cfgPtr.Load()
-		ctx, cancel := context.WithTimeout(c.Context(), 15*time.Second)
+		ctx, cancel := context.WithTimeout(c.Context(), httpHandlerTimeout)
 		defer cancel()
 
 		nodes, isCached := f.FetchAll(ctx)
@@ -230,8 +256,15 @@ func setupLogger(cfg *config.Config) {
 }
 
 func buildTemplateData(nodes []model.NodeData, cfg *config.Config) templateData {
+	views := make([]nodeView, len(nodes))
+	for i, n := range nodes {
+		views[i] = nodeView{Label: n.Label, Location: n.Location, ExporterInfo: n.ExporterInfo, Pools: n.Pools}
+	}
+	nodesJSON, _ := json.Marshal(views)
+
 	d := templateData{
 		Nodes:       nodes,
+		NodesJSON:   template.JS(nodesJSON), //nolint:gosec // json.Marshal output is safe for inline JS
 		RefreshSecs: int(cfg.Refresh.Seconds()),
 		FetchedAt:   time.Now().Format("15:04:05"),
 		TotalNodes:  len(nodes),
@@ -258,7 +291,7 @@ func buildTemplateData(nodes []model.NodeData, cfg *config.Config) templateData 
 func serveHealthCheck(c fiber.Ctx, f *fetcher.Fetcher, label, poolName string, cfg *config.Config) error {
 	slog.Debug("health check", "label", label, "pool", poolName)
 
-	ctx, cancel := context.WithTimeout(c.Context(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(c.Context(), httpHandlerTimeout)
 	defer cancel()
 
 	nodes, isCached := f.FetchAll(ctx)

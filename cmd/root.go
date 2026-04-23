@@ -41,13 +41,13 @@ func init() {
 	rootCmd.PersistentFlags().Float64("max-usage-percent", 0, "usage threshold for health failure (0 to disable)")
 	rootCmd.PersistentFlags().String("log-format", "text", "log format (text or json)")
 
-	_ = viper.BindPFlag("endpoints", rootCmd.PersistentFlags().Lookup("endpoints"))
-	_ = viper.BindPFlag("addr", rootCmd.PersistentFlags().Lookup("addr"))
-	_ = viper.BindPFlag("refresh", rootCmd.PersistentFlags().Lookup("refresh"))
-	_ = viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
-	_ = viper.BindPFlag("trusted_proxies", rootCmd.PersistentFlags().Lookup("trusted-proxies"))
-	_ = viper.BindPFlag("max_usage_percent", rootCmd.PersistentFlags().Lookup("max-usage-percent"))
-	_ = viper.BindPFlag("log_format", rootCmd.PersistentFlags().Lookup("log-format"))
+	mustBindPFlag("endpoints", "endpoints")
+	mustBindPFlag("addr", "addr")
+	mustBindPFlag("refresh", "refresh")
+	mustBindPFlag("debug", "debug")
+	mustBindPFlag("trusted_proxies", "trusted-proxies")
+	mustBindPFlag("max_usage_percent", "max-usage-percent")
+	mustBindPFlag("log_format", "log-format")
 }
 
 func initConfig() {
@@ -74,4 +74,10 @@ func initConfig() {
 
 func configInitError() error {
 	return initConfigErr
+}
+
+func mustBindPFlag(viperKey, flagName string) {
+	if err := viper.BindPFlag(viperKey, rootCmd.PersistentFlags().Lookup(flagName)); err != nil {
+		panic(fmt.Sprintf("viper.BindPFlag(%q, %q): %v", viperKey, flagName, err))
+	}
 }

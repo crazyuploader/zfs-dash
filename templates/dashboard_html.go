@@ -6,14 +6,11 @@ const dashboardHTML = `<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ZFS Dashboard</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 /* ── Design Tokens ─────────────────────────────────── */
 :root {
-  --font-body: 'DM Sans', system-ui, sans-serif;
-  --font-mono: 'DM Mono', 'JetBrains Mono', monospace;
+  --font-body: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'DM Mono', 'JetBrains Mono', ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
 
   --text-xs:   clamp(0.72rem,  0.68rem + 0.2vw, 0.8rem);
   --text-sm:   clamp(0.82rem,  0.78rem + 0.2vw, 0.9rem);
@@ -938,6 +935,7 @@ button:focus-visible,
           {{if $node.Location}}<div class="node-location">{{$node.Location}}</div>{{end}}
         </div>
         <div class="node-url">{{$node.URL}}</div>
+        {{if $node.ExporterInfo.Version}}<div class="node-url">zfs-exporter {{$node.ExporterInfo.Version}}{{if $node.ExporterInfo.GoVersion}} · {{$node.ExporterInfo.GoVersion}}{{end}}</div>{{end}}
       </div>
       <div class="node-ts" aria-label="Fetched at">{{fmtNodeTime $node.FetchedAt}}</div>
     </div>
@@ -1064,7 +1062,7 @@ button:focus-visible,
 (function () {
   'use strict';
 
-  const nodes = {{safeJS (toJSON .Nodes)}};
+  const nodes = {{.NodesJSON}};
   const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   /* ── Theme toggle ─────────────────────────────────── */
