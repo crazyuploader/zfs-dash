@@ -62,15 +62,15 @@ Access charts at **`/history`** — a link appears in the dashboard topbar when 
 
 **Recorded metrics:**
 
-| Series | Description |
-|--------|-------------|
-| `pool/{name}/used_pct` | Pool used % |
-| `pool/{name}/alloc_bytes` | Pool allocated bytes |
-| `pool/{name}/free_bytes` | Pool free bytes |
-| `disk/{dev}/temp_c` | Disk temperature °C |
-| `disk/{dev}/wear_pct` | NVMe percentage used (wear) |
-| `disk/{dev}/wear_lvl` | SATA SSD wear leveling count |
-| `disk/{dev}/pow_hrs` | Power-on hours |
+| Series                    | Description                  |
+| ------------------------- | ---------------------------- |
+| `pool/{name}/used_pct`    | Pool used %                  |
+| `pool/{name}/alloc_bytes` | Pool allocated bytes         |
+| `pool/{name}/free_bytes`  | Pool free bytes              |
+| `disk/{dev}/temp_c`       | Disk temperature °C          |
+| `disk/{dev}/wear_pct`     | NVMe percentage used (wear)  |
+| `disk/{dev}/wear_lvl`     | SATA SSD wear leveling count |
+| `disk/{dev}/pow_hrs`      | Power-on hours               |
 
 Data is pruned automatically to fit within the configured retention window. Storage is roughly 8 bytes per data point — 30 days at a 5-minute interval across 50 disks × 4 metrics ≈ 35 MB.
 
