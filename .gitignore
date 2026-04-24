@@ -38,4 +38,8 @@ config.yaml
 zfs-dash
 
 # Data
-data
+/data/
+
+# Air (live reload) build output
+/tmp/
+build-errors.log

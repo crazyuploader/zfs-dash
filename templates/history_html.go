@@ -59,19 +59,30 @@ body {
 .logo { display:flex; align-items:center; gap:var(--space-2); text-decoration:none; color:var(--text); font-weight:600; font-size:var(--text-base); }
 .logo-sub { font-weight:400; color:var(--text-muted); margin-left:0.3em; font-size:var(--text-sm); }
 .topbar-spacer { flex:1; }
-.back-link { display:flex; align-items:center; gap:var(--space-2); color:var(--text-muted); text-decoration:none; font-size:var(--text-sm); padding:0.35rem 0.75rem; border-radius:var(--radius-full); border:1px solid var(--border); transition:var(--transition); }
+.back-link { display:flex; align-items:center; gap:var(--space-2); color:var(--text-muted); text-decoration:none; font-size:var(--text-sm); padding:0.35rem 0.75rem; border-radius:var(--radius-full); border:1px solid var(--border); transition:var(--transition); white-space:nowrap; }
 .back-link:hover { color:var(--text); border-color:var(--border-hi); }
-.icon-btn { display:flex; align-items:center; justify-content:center; width:36px; height:36px; border:1px solid var(--border); border-radius:var(--radius-md); background:transparent; color:var(--text-muted); cursor:pointer; transition:var(--transition); touch-action:manipulation; }
+.icon-btn { display:flex; align-items:center; justify-content:center; width:36px; height:36px; border:1px solid var(--border); border-radius:var(--radius-md); background:transparent; color:var(--text-muted); cursor:pointer; transition:var(--transition); touch-action:manipulation; flex-shrink:0; }
 .icon-btn:hover { color:var(--text); border-color:var(--border-hi); }
 
+/* ── Mobile sidebar toggle ── */
+.sidebar-toggle {
+  display:none; align-items:center; justify-content:center;
+  width:36px; height:36px; border:1px solid var(--border); border-radius:var(--radius-md);
+  background:transparent; color:var(--text-muted); cursor:pointer; transition:var(--transition);
+  touch-action:manipulation; flex-shrink:0;
+}
+.sidebar-toggle:hover { color:var(--text); border-color:var(--border-hi); }
+@media (max-width: 700px) { .sidebar-toggle { display:flex; } }
+
 /* ── Layout ── */
-.layout { display:flex; flex:1; min-height:0; }
+.layout { display:flex; flex:1; min-height:0; overflow:hidden; }
 .sidebar {
-  width:280px; flex-shrink:0; border-right:1px solid var(--border);
+  width:260px; flex-shrink:0; border-right:1px solid var(--border);
   overflow-y:auto; overflow-x:hidden; padding:var(--space-4);
   display:flex; flex-direction:column; gap:var(--space-4);
+  transition: transform var(--transition), opacity var(--transition);
 }
-.main { flex:1; display:flex; flex-direction:column; padding:var(--space-6); gap:var(--space-6); overflow-y:auto; }
+.main { flex:1; display:flex; flex-direction:column; padding:var(--space-4) var(--space-6); gap:var(--space-6); overflow-y:auto; min-width:0; }
 
 /* ── Sidebar sections ── */
 .sidebar-label { font-size:0.6rem; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--text-faint); margin-bottom:var(--space-2); }
@@ -84,23 +95,59 @@ body {
 .range-pill:hover { border-color:var(--border-hi); color:var(--text); }
 .range-pill.active { background:var(--primary); border-color:var(--primary); color:#fff; }
 
-.series-tree { display:flex; flex-direction:column; gap:var(--space-2); }
-.series-node-group { display:flex; flex-direction:column; gap:0.25rem; }
-.series-node-label { font-size:var(--text-sm); font-weight:600; color:var(--text); padding:0.2rem 0; }
-.series-kind-group { margin-left:var(--space-3); display:flex; flex-direction:column; gap:0.15rem; }
-.series-kind-label { font-size:0.65rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-faint); padding:0.15rem 0; }
-.series-name-group { margin-left:var(--space-3); display:flex; flex-direction:column; gap:0.1rem; }
+/* ── Hierarchical series tree ── */
+/* node → kind → disk → metrics */
+.series-tree { display:flex; flex-direction:column; gap:var(--space-3); }
+
+.node-group { display:flex; flex-direction:column; gap:var(--space-2); }
+.node-header {
+  font-size:0.65rem; font-weight:700; letter-spacing:0.1em; text-transform:uppercase;
+  color:var(--primary); padding:0.15rem 0; border-bottom:1px solid var(--border); margin-bottom:0.25rem;
+}
+
+.kind-group { display:flex; flex-direction:column; gap:0.1rem; margin-bottom:var(--space-2); }
+.kind-header {
+  font-size:0.6rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase;
+  color:var(--text-faint); padding:0.1rem 0 0.2rem;
+}
+
+/* Disk row — collapsible */
+.disk-group { display:flex; flex-direction:column; border-radius:var(--radius-md); overflow:hidden; margin-bottom:0.15rem; }
+.disk-toggle {
+  display:flex; align-items:center; gap:var(--space-2); padding:0.3rem 0.4rem;
+  cursor:pointer; border-radius:var(--radius-md); transition:var(--transition);
+  background:transparent; border:none; width:100%; text-align:left; color:var(--text);
+  touch-action:manipulation;
+}
+.disk-toggle:hover { background:var(--surface-2); }
+.disk-chevron {
+  width:12px; height:12px; flex-shrink:0; color:var(--text-faint);
+  transition:transform 180ms ease;
+}
+.disk-group.open .disk-chevron { transform:rotate(90deg); }
+.disk-name {
+  font-family:var(--font-mono); font-size:0.78rem; color:var(--text);
+  min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;
+}
+
+/* Metric items under a disk */
+.disk-metrics {
+  display:none; flex-direction:column; gap:0.05rem;
+  padding:0.15rem 0 0.15rem var(--space-4); border-left:1px solid var(--border);
+  margin-left:1.25rem;
+}
+.disk-group.open .disk-metrics { display:flex; }
+
 .series-item {
-  display:flex; align-items:center; gap:var(--space-2); padding:0.25rem 0.4rem;
+  display:flex; align-items:center; gap:var(--space-2); padding:0.22rem 0.4rem;
   border-radius:var(--radius-md); cursor:pointer; transition:var(--transition);
   font-size:var(--text-sm); min-width:0; overflow:hidden;
 }
 .series-item:hover { background:var(--surface-2); }
 .series-item input[type=checkbox] { accent-color:var(--primary); cursor:pointer; flex-shrink:0; touch-action:manipulation; }
-.series-item-label { min-width:0; flex:1; font-family:var(--font-mono); display:flex; flex-direction:column; gap:0.05rem; }
-.series-item-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); font-size:0.78rem; }
-.series-item-metric { color:var(--text-faint); font-size:0.7rem; white-space:nowrap; }
-.series-color-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.series-item-label { min-width:0; flex:1; font-family:var(--font-mono); }
+.series-item-metric { color:var(--text-muted); font-size:0.72rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.series-color-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
 .series-empty { color:var(--text-faint); font-size:var(--text-sm); padding:var(--space-2) 0; }
 
 /* ── Chart area ── */
@@ -114,30 +161,68 @@ body {
 .chart-canvas-wrap { position:relative; width:100%; }
 canvas#chart { display:block; width:100%; }
 .chart-empty { height:200px; display:flex; align-items:center; justify-content:center; color:var(--text-faint); font-size:var(--text-sm); }
-.chart-legend { display:flex; flex-wrap:wrap; gap:var(--space-3); }
-.legend-item { display:flex; align-items:center; gap:var(--space-2); font-size:var(--text-sm); color:var(--text-muted); min-width:0; max-width:260px; }
-.legend-item span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
-.legend-line { width:18px; height:2px; border-radius:1px; flex-shrink:0; }
+.chart-legend { display:flex; flex-wrap:wrap; gap:var(--space-2) var(--space-3); }
+.legend-item { display:flex; align-items:center; gap:var(--space-2); font-size:0.75rem; color:var(--text-muted); min-width:0; max-width:220px; }
+.legend-item span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; font-family:var(--font-mono); }
+.legend-line { width:16px; height:2px; border-radius:1px; flex-shrink:0; }
 
-/* ── Tooltip ── */
+/* ── Tooltip — FIXED ── */
 #chart-tooltip {
   position:fixed; pointer-events:none; z-index:100;
   background:var(--surface-3); border:1px solid var(--border-hi);
-  border-radius:var(--radius-md); padding:0.4rem 0.75rem;
-  font-size:var(--text-sm); font-family:var(--font-mono);
+  border-radius:var(--radius-md);
+  padding:0.5rem 0.65rem;
+  font-size:0.76rem; font-family:var(--font-mono);
   box-shadow:var(--shadow-md); display:none;
-  max-width:220px; font-variant-numeric:tabular-nums;
+  /* Key fix: constrain width and allow proper layout */
+  width:220px;
+  font-variant-numeric:tabular-nums;
 }
-.tooltip-time { color:var(--text-muted); font-size:0.72rem; margin-bottom:0.2rem; font-variant-numeric:tabular-nums; }
-.tooltip-row { display:flex; align-items:center; gap:var(--space-2); }
+.tooltip-time { color:var(--text-muted); font-size:0.7rem; margin-bottom:0.35rem; font-variant-numeric:tabular-nums; }
+.tooltip-row {
+  display:grid;
+  /* dot | name (fills space) | value (right-aligned fixed width) */
+  grid-template-columns: 8px 1fr auto;
+  align-items:center;
+  gap:0 0.4rem;
+  padding:0.18rem 0;
+  border-bottom:1px solid var(--border);
+}
+.tooltip-row:last-child { border-bottom:none; }
 .tooltip-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+.tooltip-name {
+  color:var(--text-muted); font-size:0.7rem;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  min-width:0;
+}
+.tooltip-val {
+  color:var(--text); font-size:0.76rem;
+  white-space:nowrap; text-align:right;
+  font-weight:600;
+}
 
 /* ── Status banner ── */
 .status-banner { color:var(--text-faint); font-size:var(--text-sm); text-align:center; padding:var(--space-4); }
 
+/* ── Mobile ── */
 @media (max-width: 700px) {
-  .sidebar { width:100%; border-right:none; border-bottom:1px solid var(--border); }
-  .layout { flex-direction:column; }
+  .topbar { padding: 0 var(--space-4); }
+  .layout { flex-direction:column; position:relative; }
+  .sidebar {
+    position: absolute; top: 0; left: 0; bottom: 0; z-index: 30;
+    width: 260px; transform: translateX(-100%);
+    background: var(--bg); border-right: 1px solid var(--border-hi);
+    box-shadow: var(--shadow-md);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-overlay {
+    display:none; position:fixed; inset:52px 0 0 0; z-index:29;
+    background:rgba(0,0,0,0.4); backdrop-filter:blur(2px);
+  }
+  .sidebar-overlay.open { display:block; }
+  .main { padding: var(--space-3); gap: var(--space-3); }
+  .chart-card { padding: var(--space-3) var(--space-3) var(--space-2); }
+  #chart-tooltip { width:190px; font-size:0.72rem; }
 }
 </style>
 </head>
@@ -164,12 +249,20 @@ canvas#chart { display:block; width:100%; }
     </svg>
     Dashboard
   </a>
+  <button class="sidebar-toggle" id="sidebar-toggle-btn" aria-label="Toggle sidebar">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+    </svg>
+  </button>
   <button class="icon-btn" id="theme-btn" aria-label="Toggle theme"></button>
 </header>
 
+<!-- Mobile overlay -->
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+
 <div class="layout">
   <!-- Sidebar -->
-  <aside class="sidebar">
+  <aside class="sidebar" id="sidebar">
     <div>
       <div class="sidebar-label">Time Range</div>
       <div class="range-pills" id="range-pills">
@@ -208,7 +301,19 @@ canvas#chart { display:block; width:100%; }
 
 <script>
 (function () {
-  /* ── Theme (shared key with dashboard) ── */
+  /* ── Mobile sidebar toggle ── */
+  const sidebarEl = document.getElementById('sidebar');
+  const overlayEl = document.getElementById('sidebar-overlay');
+  document.getElementById('sidebar-toggle-btn').addEventListener('click', () => {
+    sidebarEl.classList.toggle('open');
+    overlayEl.classList.toggle('open');
+  });
+  overlayEl.addEventListener('click', () => {
+    sidebarEl.classList.remove('open');
+    overlayEl.classList.remove('open');
+  });
+
+  /* ── Theme ── */
   const THEME_KEY = 'zfs-dash-theme';
   const moonSVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
   const sunSVG  = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
@@ -233,15 +338,16 @@ canvas#chart { display:block; width:100%; }
   });
 
   /* ── Constants ── */
-  const COLORS = ['#4f98a3','#e8af34','#dd6974','#6daa45','#9b6aba','#e07b54','#5b8dd9','#d45fa6'];
+  const COLORS = ['#4f98a3','#e8af34','#dd6974','#6daa45','#9b6aba','#e07b54','#5b8dd9','#d45fa6','#3db08a','#f0c060'];
   const METRIC_LABELS = {
     used_pct: 'Usage %', alloc_bytes: 'Allocated', free_bytes: 'Free',
-    temp_c: 'Temp °C', wear_pct: 'NVMe Wear %', wear_lvl: 'Wear Leveling',
-    pow_hrs: 'Power-On Hours',
+    temp_c: 'Temp °C', wear_pct: 'NVMe Wear %', wear_lvl: 'Wear Level',
+    pow_hrs: 'Pwr-On Hrs',
   };
-  const METRIC_UNIT = {
+  // Short labels for tooltip value column
+  const METRIC_SHORT = {
     used_pct: '%', wear_pct: '%', temp_c: '°C', pow_hrs: 'h',
-    alloc_bytes: 'B', free_bytes: 'B',
+    alloc_bytes: '', free_bytes: '',
   };
 
   /* ── State ── */
@@ -250,7 +356,7 @@ canvas#chart { display:block; width:100%; }
   let rangeHours = 24;
   let colorMap = {};
   let colorIdx = 0;
-  let activeSeries = []; // [{info, points}]
+  let activeSeries = [];
 
   /* ── Fetch series list ── */
   async function loadSeries() {
@@ -263,7 +369,7 @@ canvas#chart { display:block; width:100%; }
     }
   }
 
-  /* ── Build sidebar tree ── */
+  /* ── Build hierarchical sidebar tree: node → kind → disk → metrics ── */
   function buildTree() {
     const tree = document.getElementById('series-tree');
     tree.innerHTML = '';
@@ -272,7 +378,12 @@ canvas#chart { display:block; width:100%; }
       return;
     }
 
-    // Group: node → kind → name → [metrics]
+    // Assign colors first
+    for (const s of allSeries) {
+      if (!colorMap[s.key]) colorMap[s.key] = COLORS[colorIdx++ % COLORS.length];
+    }
+
+    // Group: node → kind → diskName → [series]
     const byNode = {};
     for (const s of allSeries) {
       if (!byNode[s.node]) byNode[s.node] = {};
@@ -281,36 +392,63 @@ canvas#chart { display:block; width:100%; }
       byNode[s.node][s.kind][s.name].push(s);
     }
 
+    const chevronSVG = '<svg class="disk-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>';
+
     for (const [node, kinds] of Object.entries(byNode)) {
       const ng = document.createElement('div');
-      ng.className = 'series-node-group';
-      const nl = document.createElement('div');
-      nl.className = 'series-node-label';
-      nl.textContent = node;
-      ng.appendChild(nl);
+      ng.className = 'node-group';
 
-      for (const [kind, names] of Object.entries(kinds)) {
+      const nh = document.createElement('div');
+      nh.className = 'node-header';
+      nh.textContent = node;
+      ng.appendChild(nh);
+
+      for (const [kind, disks] of Object.entries(kinds)) {
         const kg = document.createElement('div');
-        kg.className = 'series-kind-group';
-        const kl = document.createElement('div');
-        kl.className = 'series-kind-label';
-        kl.textContent = kind === 'pool' ? 'Pools' : 'Disks';
-        kg.appendChild(kl);
+        kg.className = 'kind-group';
 
-        for (const [name, metrics] of Object.entries(names)) {
-          const nameg = document.createElement('div');
-          nameg.className = 'series-name-group';
+        const kh = document.createElement('div');
+        kh.className = 'kind-header';
+        kh.textContent = kind === 'pool' ? 'Pools' : 'Disks';
+        kg.appendChild(kh);
+
+        for (const [diskName, metrics] of Object.entries(disks)) {
+          const shortName = diskName.replace(/^.*\/([^/]+)$/, '$1');
+
+          const dg = document.createElement('div');
+          dg.className = 'disk-group';
+          // Auto-open if any metrics of this disk are selected
+          if (metrics.some(s => selected.has(s.key))) dg.classList.add('open');
+
+          // Toggle button
+          const dt = document.createElement('button');
+          dt.className = 'disk-toggle';
+          dt.type = 'button';
+          dt.title = diskName;
+          dt.innerHTML = chevronSVG +
+            '<span class="disk-name">' + escHtml(shortName) + '</span>';
+          dt.addEventListener('click', () => dg.classList.toggle('open'));
+          dg.appendChild(dt);
+
+          // Metric checkboxes
+          const dm = document.createElement('div');
+          dm.className = 'disk-metrics';
 
           for (const s of metrics) {
-            if (!colorMap[s.key]) colorMap[s.key] = COLORS[colorIdx++ % COLORS.length];
             const item = document.createElement('label');
             item.className = 'series-item';
 
             const cb = document.createElement('input');
             cb.type = 'checkbox';
             cb.dataset.key = s.key;
+            cb.checked = selected.has(s.key);
             cb.addEventListener('change', () => {
-              if (cb.checked) selected.add(s.key); else selected.delete(s.key);
+              if (cb.checked) {
+                selected.add(s.key);
+                dg.classList.add('open');
+              } else {
+                selected.delete(s.key);
+              }
               refresh();
             });
 
@@ -320,17 +458,17 @@ canvas#chart { display:block; width:100%; }
 
             const lbl = document.createElement('span');
             lbl.className = 'series-item-label';
-            const shortName = name.replace(/^.*\/([^/]+)$/, '$1'); // last path component for devices
-            lbl.title = name + ' · ' + (METRIC_LABELS[s.metric] || s.metric);
-            lbl.innerHTML = '<span class="series-item-name">' + escHtml(shortName) + '</span>' +
-              '<span class="series-item-metric">· ' + escHtml(METRIC_LABELS[s.metric] || s.metric) + '</span>';
+            lbl.innerHTML = '<span class="series-item-metric">' +
+              escHtml(METRIC_LABELS[s.metric] || s.metric) + '</span>';
 
             item.appendChild(cb);
             item.appendChild(dot);
             item.appendChild(lbl);
-            nameg.appendChild(item);
+            dm.appendChild(item);
           }
-          kg.appendChild(nameg);
+
+          dg.appendChild(dm);
+          kg.appendChild(dg);
         }
         ng.appendChild(kg);
       }
@@ -348,16 +486,16 @@ canvas#chart { display:block; width:100%; }
     refresh();
   });
 
-  /* ── Bucket size based on range ── */
+  /* ── Bucket size ── */
   function bucketSecs(hours) {
-    if (hours <= 1)   return 0;     // raw
-    if (hours <= 6)   return 300;   // 5-min
-    if (hours <= 24)  return 900;   // 15-min
-    if (hours <= 168) return 3600;  // 1-hour
-    return 21600;                   // 6-hour for 30d
+    if (hours <= 1)   return 0;
+    if (hours <= 6)   return 300;
+    if (hours <= 24)  return 900;
+    if (hours <= 168) return 3600;
+    return 21600;
   }
 
-  /* ── Fetch and render ── */
+  /* ── Fetch & render ── */
   async function refresh() {
     if (!selected.size) {
       activeSeries = [];
@@ -409,14 +547,12 @@ canvas#chart { display:block; width:100%; }
     canvas.style.display = 'block';
     empty.style.display = 'none';
 
-    // Update title
     const metrics = [...new Set(activeSeries.map(s => s.info?.metric).filter(Boolean))];
     titleEl.textContent = metrics.map(m => METRIC_LABELS[m] || m).join(' · ');
 
-    // DPR-aware sizing
     const dpr = window.devicePixelRatio || 1;
     const W = wrap.clientWidth;
-    const H = Math.max(240, Math.min(400, W * 0.38));
+    const H = Math.max(200, Math.min(400, W * 0.38));
     canvas.width = W * dpr;
     canvas.height = H * dpr;
     canvas.style.height = H + 'px';
@@ -425,7 +561,6 @@ canvas#chart { display:block; width:100%; }
     const plotW = W - PAD.left - PAD.right;
     const plotH = H - PAD.top - PAD.bottom;
 
-    // Data bounds
     let minTs = Infinity, maxTs = -Infinity, minV = Infinity, maxV = -Infinity;
     for (const s of activeSeries) {
       for (const p of (s.points || [])) {
@@ -448,14 +583,13 @@ canvas#chart { display:block; width:100%; }
 
     ctx.clearRect(0, 0, W, H);
 
-    // Grid + Y labels
     const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
     const gridColor = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)';
     const labelColor = isDark ? '#85858f' : '#62626b';
     const Y_STEPS = 4;
     ctx.font = '11px ' + getComputedStyle(document.body).getPropertyValue('--font-mono').trim();
-    // Use the first active series' metric for Y-axis labels (best effort when mixing metrics)
     const yAxisMetric = activeSeries[0]?.info?.metric || metrics[0];
+
     for (let i = 0; i <= Y_STEPS; i++) {
       const v = yMin + (yMax - yMin) * (i / Y_STEPS);
       const y = yScale(v);
@@ -465,7 +599,6 @@ canvas#chart { display:block; width:100%; }
       ctx.fillText(fmtVal(v, yAxisMetric), PAD.left - 6, y + 4);
     }
 
-    // X labels
     const X_STEPS = Math.min(6, Math.floor(plotW / 70));
     for (let i = 0; i <= X_STEPS; i++) {
       const ts = minTs + tsSpan * (i / X_STEPS);
@@ -474,7 +607,6 @@ canvas#chart { display:block; width:100%; }
       ctx.fillText(fmtTime(ts, rangeHours), x, H - PAD.bottom + 16);
     }
 
-    // Series lines + fill
     for (const s of activeSeries) {
       if (!s.points || !s.points.length) continue;
       const color = colorMap[s.key] || COLORS[0];
@@ -483,7 +615,6 @@ canvas#chart { display:block; width:100%; }
       ctx.rect(PAD.left, PAD.top, plotW, plotH);
       ctx.clip();
 
-      // Fill
       ctx.beginPath();
       let first = true;
       for (const p of s.points) {
@@ -498,7 +629,6 @@ canvas#chart { display:block; width:100%; }
       ctx.fillStyle = color + '18';
       ctx.fill();
 
-      // Line
       ctx.beginPath();
       first = true;
       for (const p of s.points) {
@@ -510,7 +640,6 @@ canvas#chart { display:block; width:100%; }
       ctx.restore();
     }
 
-    // Legend
     legendEl.innerHTML = '';
     for (const s of activeSeries) {
       if (!s.info) continue;
@@ -523,12 +652,11 @@ canvas#chart { display:block; width:100%; }
       legendEl.appendChild(li);
     }
 
-    // Store render state for tooltip
     canvas._renderState = { xScale, yScale, tsSpan, minTs, maxTs, yMin, yMax, plotW, plotH, W, H };
   }
 
   /* ── Tooltip ── */
-  canvas.addEventListener('mousemove', e => {
+  function showTooltip(e) {
     const rs = canvas._renderState;
     if (!rs || !activeSeries.length) return;
     const rect = canvas.getBoundingClientRect();
@@ -539,9 +667,9 @@ canvas#chart { display:block; width:100%; }
 
     ttTime.textContent = fmtTimeFull(ts);
     ttRows.innerHTML = '';
+
     for (const s of activeSeries) {
       if (!s.points || !s.points.length) continue;
-      // Find nearest point
       let nearest = s.points[0];
       let minDist = Math.abs(s.points[0].ts - ts);
       for (const p of s.points) {
@@ -549,27 +677,52 @@ canvas#chart { display:block; width:100%; }
         if (d < minDist) { minDist = d; nearest = p; }
       }
       const color = colorMap[s.key] || COLORS[0];
-      const shortName = s.info ? s.info.name.replace(/^.*\/([^/]+)$/, '$1') : s.key;
-      const seriesMetric = s.info?.metric;
+      // Short name: last segment, trimmed to ~12 chars
+      const rawName = s.info ? s.info.name.replace(/^.*\/([^/]+)$/, '$1') : s.key;
+      const shortName = rawName.length > 14 ? rawName.slice(0, 12) + '…' : rawName;
+      const metricLabel = s.info ? (METRIC_SHORT[s.info.metric] !== undefined
+        ? fmtValFull(nearest.v, s.info.metric)
+        : fmtValFull(nearest.v, s.info.metric)) : nearest.v.toFixed(2);
+
       const row = document.createElement('div');
       row.className = 'tooltip-row';
-      row.innerHTML = '<span class="tooltip-dot" style="background:' + color + '"></span>' +
-        '<span style="color:var(--text-muted);font-size:0.72rem">' + escHtml(shortName) + '</span>' +
-        '<span style="margin-left:auto;color:var(--text)">' + fmtValFull(nearest.v, seriesMetric) + '</span>';
+      row.innerHTML =
+        '<span class="tooltip-dot" style="background:' + color + '"></span>' +
+        '<span class="tooltip-name">' + escHtml(shortName) + '</span>' +
+        '<span class="tooltip-val">' + escHtml(fmtValFull(nearest.v, s.info?.metric)) + '</span>';
       ttRows.appendChild(row);
     }
 
     tooltip.style.display = 'block';
-    const tx = e.clientX + 14;
-    const ty = e.clientY - 10;
-    tooltip.style.left = (tx + tooltip.offsetWidth > window.innerWidth ? e.clientX - tooltip.offsetWidth - 14 : tx) + 'px';
+
+    // Smart positioning: keep tooltip within viewport
+    const tw = tooltip.offsetWidth;
+    const th = tooltip.offsetHeight;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    let tx = e.clientX + 16;
+    let ty = e.clientY - 10;
+    if (tx + tw > vw - 8) tx = e.clientX - tw - 16;
+    if (ty + th > vh - 8) ty = vh - th - 8;
+    if (ty < 8) ty = 8;
+    tooltip.style.left = tx + 'px';
     tooltip.style.top = ty + 'px';
-  });
+  }
+
+  canvas.addEventListener('mousemove', showTooltip);
   canvas.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
+
+  // Touch support for tooltip
+  canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    const t = e.touches[0];
+    showTooltip({ clientX: t.clientX, clientY: t.clientY });
+  }, { passive: false });
+  canvas.addEventListener('touchend', () => { tooltip.style.display = 'none'; });
 
   /* ── Helpers ── */
   function fmtVal(v, metric) {
-    if (metric === 'alloc_bytes' || metric === 'free_bytes') return fmtBytes(v * (1 << 20)); // Convert MiB to bytes
+    if (metric === 'alloc_bytes' || metric === 'free_bytes') return fmtBytes(v * (1 << 20));
     if (metric === 'used_pct' || metric === 'wear_pct') return v.toFixed(1) + '%';
     if (metric === 'temp_c') return v.toFixed(1) + '°';
     if (v >= 1e6) return (v/1e6).toFixed(1) + 'M';
@@ -577,17 +730,18 @@ canvas#chart { display:block; width:100%; }
     return v.toFixed(1);
   }
   function fmtValFull(v, metric) {
-    if (metric === 'alloc_bytes' || metric === 'free_bytes') return fmtBytes(v * (1 << 20)); // Convert MiB to bytes
+    if (!metric) return v.toFixed(2);
+    if (metric === 'alloc_bytes' || metric === 'free_bytes') return fmtBytes(v * (1 << 20));
     if (metric === 'used_pct' || metric === 'wear_pct') return v.toFixed(2) + '%';
-    if (metric === 'temp_c') return v.toFixed(1) + ' °C';
-    if (metric === 'pow_hrs') return v.toFixed(1) + ' h';
+    if (metric === 'temp_c') return v.toFixed(1) + '°C';
+    if (metric === 'pow_hrs') return v.toFixed(0) + 'h';
     return v.toFixed(2);
   }
   function fmtBytes(b) {
     const u = ['B','KB','MB','GB','TB','PB'];
     let i = 0;
     while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
-    return b.toFixed(2) + ' ' + u[i];
+    return b.toFixed(1) + ' ' + u[i];
   }
   function fmtTime(ts, hours) {
     const d = new Date(ts * 1000);
@@ -601,7 +755,8 @@ canvas#chart { display:block; width:100%; }
            d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false});
   }
   function escHtml(s) {
-    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    if (s == null) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
   /* ── Resize ── */

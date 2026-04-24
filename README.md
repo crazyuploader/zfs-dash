@@ -41,8 +41,8 @@ trusted_proxies: [] # e.g., ["127.0.0.1", "100.64.0.0/10"]
 history:
   enabled: false
   path: "./data/history.db"
-  retention: "720h"        # 30 days; supports any Go duration string
-  record_interval: "5m"    # sample frequency; defaults to refresh interval
+  retention: "720h" # 30 days; supports any Go duration string
+  record_interval: "5m" # sample frequency; defaults to refresh interval
 
 endpoints:
   - url: "http://host1:9134/metrics"
