@@ -63,7 +63,7 @@ body {
 .layout { display:flex; flex:1; min-height:0; }
 .sidebar {
   width:280px; flex-shrink:0; border-right:1px solid var(--border);
-  overflow-y:auto; padding:var(--space-4);
+  overflow-y:auto; overflow-x:hidden; padding:var(--space-4);
   display:flex; flex-direction:column; gap:var(--space-4);
 }
 .main { flex:1; display:flex; flex-direction:column; padding:var(--space-6); gap:var(--space-6); overflow-y:auto; }
@@ -88,11 +88,13 @@ body {
 .series-item {
   display:flex; align-items:center; gap:var(--space-2); padding:0.25rem 0.4rem;
   border-radius:var(--radius-md); cursor:pointer; transition:var(--transition);
-  font-size:var(--text-sm);
+  font-size:var(--text-sm); min-width:0; overflow:hidden;
 }
 .series-item:hover { background:var(--surface-2); }
 .series-item input[type=checkbox] { accent-color:var(--primary); cursor:pointer; flex-shrink:0; }
-.series-item-label { color:var(--text-muted); flex:1; font-family:var(--font-mono); font-size:0.78rem; }
+.series-item-label { min-width:0; flex:1; font-family:var(--font-mono); display:flex; flex-direction:column; gap:0.05rem; }
+.series-item-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); font-size:0.78rem; }
+.series-item-metric { color:var(--text-faint); font-size:0.7rem; white-space:nowrap; }
 .series-color-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
 .series-empty { color:var(--text-faint); font-size:var(--text-sm); padding:var(--space-2) 0; }
 
@@ -107,8 +109,9 @@ body {
 canvas#chart { display:block; width:100%; }
 .chart-empty { height:200px; display:flex; align-items:center; justify-content:center; color:var(--text-faint); font-size:var(--text-sm); }
 .chart-legend { display:flex; flex-wrap:wrap; gap:var(--space-3); }
-.legend-item { display:flex; align-items:center; gap:var(--space-2); font-size:var(--text-sm); color:var(--text-muted); }
-.legend-line { width:18px; height:2px; border-radius:1px; }
+.legend-item { display:flex; align-items:center; gap:var(--space-2); font-size:var(--text-sm); color:var(--text-muted); min-width:0; max-width:260px; }
+.legend-item span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+.legend-line { width:18px; height:2px; border-radius:1px; flex-shrink:0; }
 
 /* ── Tooltip ── */
 #chart-tooltip {
@@ -155,12 +158,7 @@ canvas#chart { display:block; width:100%; }
     </svg>
     Dashboard
   </a>
-  <button class="icon-btn" id="theme-btn" aria-label="Toggle theme">
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-         stroke-width="2" aria-hidden="true">
-      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-    </svg>
-  </button>
+  <button class="icon-btn" id="theme-btn" aria-label="Toggle theme"></button>
 </header>
 
 <div class="layout">
@@ -204,13 +202,27 @@ canvas#chart { display:block; width:100%; }
 
 <script>
 (function () {
-  /* ── Theme ── */
-  const saved = localStorage.getItem('theme');
-  if (saved) document.documentElement.setAttribute('data-theme', saved);
-  document.getElementById('theme-btn').addEventListener('click', () => {
-    const t = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  /* ── Theme (shared key with dashboard) ── */
+  const THEME_KEY = 'zfs-dash-theme';
+  const moonSVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+  const sunSVG  = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
+  const themeBtn = document.getElementById('theme-btn');
+  let theme;
+  try { theme = localStorage.getItem(THEME_KEY); } catch(_) { theme = null; }
+  if (theme !== 'dark' && theme !== 'light') {
+    theme = window.matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light';
+  }
+  function applyTheme(t) {
     document.documentElement.setAttribute('data-theme', t);
-    localStorage.setItem('theme', t);
+    themeBtn.innerHTML = t === 'dark' ? moonSVG : sunSVG;
+    themeBtn.setAttribute('aria-label', 'Switch to ' + (t === 'dark' ? 'light' : 'dark') + ' mode');
+  }
+  applyTheme(theme);
+  themeBtn.addEventListener('click', () => {
+    theme = theme === 'dark' ? 'light' : 'dark';
+    try { localStorage.setItem(THEME_KEY, theme); } catch(_) {}
+    applyTheme(theme);
+    if (activeSeries.length) renderChart();
   });
 
   /* ── Constants ── */
@@ -301,9 +313,10 @@ canvas#chart { display:block; width:100%; }
 
             const lbl = document.createElement('span');
             lbl.className = 'series-item-label';
-            lbl.title = name;
             const shortName = name.replace(/^.*\/([^/]+)$/, '$1'); // last path component for devices
-            lbl.textContent = shortName + ' · ' + (METRIC_LABELS[s.metric] || s.metric);
+            lbl.title = name + ' · ' + (METRIC_LABELS[s.metric] || s.metric);
+            lbl.innerHTML = '<span class="series-item-name">' + escHtml(shortName) + '</span>' +
+              '<span class="series-item-metric">· ' + escHtml(METRIC_LABELS[s.metric] || s.metric) + '</span>';
 
             item.appendChild(cb);
             item.appendChild(dot);
@@ -568,13 +581,14 @@ canvas#chart { display:block; width:100%; }
   }
   function fmtTime(ts, hours) {
     const d = new Date(ts * 1000);
-    if (hours <= 24) return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-    return d.toLocaleDateString([], {month:'short', day:'numeric'}) + ' ' + d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    if (hours <= 24) return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:false});
+    return d.toLocaleDateString([], {month:'short', day:'numeric'}) + ' ' +
+           d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:false});
   }
   function fmtTimeFull(ts) {
     const d = new Date(ts * 1000);
     return d.toLocaleDateString([], {month:'short', day:'numeric'}) + ' ' +
-           d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+           d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false});
   }
   function escHtml(s) {
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
