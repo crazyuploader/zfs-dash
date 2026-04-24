@@ -7,6 +7,7 @@ require (
 	github.com/gofiber/fiber/v3 v3.1.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
+	go.etcd.io/bbolt v1.4.3
 )
 
 require (

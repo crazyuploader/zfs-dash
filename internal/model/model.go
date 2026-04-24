@@ -61,31 +61,31 @@ type Dataset struct {
 
 // DiskInfo holds key SMART metrics for one physical disk.
 type DiskInfo struct {
-	Device          string  `json:"device"`
-	ModelName       string  `json:"model_name,omitempty"`
-	SerialNumber    string  `json:"serial_number,omitempty"`
-	FirmwareVersion string  `json:"firmware_version,omitempty"`
-	Interface       string  `json:"interface,omitempty"`   // "sat", "nvme", "scsi"
-	FormFactor      string  `json:"form_factor,omitempty"` // "3.5 inches", ""
-	Temperature     float64 `json:"temperature"`           // °C current, 0 if unknown
-	TempMin         float64 `json:"temp_min,omitempty"`    // lifetime min °C
-	TempMax         float64 `json:"temp_max,omitempty"`    // lifetime max °C
-	TempTrip        float64 `json:"temp_trip,omitempty"`   // hardware trip/critical °C
-	SmartPassed     bool    `json:"smart_passed"`
-	PowerOnHours    float64 `json:"power_on_hours"`
-	PowerCycles     float64 `json:"power_cycles,omitempty"`
-	CapacityBytes   float64 `json:"capacity_bytes"`
-	RotationRate    int     `json:"rotation_rate"`             // RPM; 0 = SSD/NVMe
-	PercentageUsed  float64 `json:"percentage_used,omitempty"` // SSD/NVMe wear 0–100
-	AvailableSpare  float64 `json:"available_spare,omitempty"` // NVMe spare %
-	SpareThreshold  float64 `json:"spare_threshold,omitempty"` // NVMe spare threshold %
-	MediaErrors      float64 `json:"media_errors,omitempty"`     // unrecovered integrity errors
-	HasMediaErrors   bool    `json:"has_media_errors,omitempty"` // true when metric was present (even if 0)
-	CriticalWarning  float64 `json:"critical_warning,omitempty"`
-	BytesRead        float64 `json:"bytes_read,omitempty"`
-	BytesWritten     float64 `json:"bytes_written,omitempty"`
+	Device               string  `json:"device"`
+	ModelName            string  `json:"model_name,omitempty"`
+	SerialNumber         string  `json:"serial_number,omitempty"`
+	FirmwareVersion      string  `json:"firmware_version,omitempty"`
+	Interface            string  `json:"interface,omitempty"`   // "sat", "nvme", "scsi"
+	FormFactor           string  `json:"form_factor,omitempty"` // "3.5 inches", ""
+	Temperature          float64 `json:"temperature"`           // °C current, 0 if unknown
+	TempMin              float64 `json:"temp_min,omitempty"`    // lifetime min °C
+	TempMax              float64 `json:"temp_max,omitempty"`    // lifetime max °C
+	TempTrip             float64 `json:"temp_trip,omitempty"`   // hardware trip/critical °C
+	SmartPassed          bool    `json:"smart_passed"`
+	PowerOnHours         float64 `json:"power_on_hours"`
+	PowerCycles          float64 `json:"power_cycles,omitempty"`
+	CapacityBytes        float64 `json:"capacity_bytes"`
+	RotationRate         int     `json:"rotation_rate"`              // RPM; 0 = SSD/NVMe
+	PercentageUsed       float64 `json:"percentage_used,omitempty"`  // SSD/NVMe wear 0–100
+	AvailableSpare       float64 `json:"available_spare,omitempty"`  // NVMe spare %
+	SpareThreshold       float64 `json:"spare_threshold,omitempty"`  // NVMe spare threshold %
+	MediaErrors          float64 `json:"media_errors,omitempty"`     // unrecovered integrity errors
+	HasMediaErrors       bool    `json:"has_media_errors,omitempty"` // true when metric was present (even if 0)
+	CriticalWarning      float64 `json:"critical_warning,omitempty"`
+	BytesRead            float64 `json:"bytes_read,omitempty"`
+	BytesWritten         float64 `json:"bytes_written,omitempty"`
 	ErrorLogCount        float64 `json:"error_log_count,omitempty"`
-	HasPercentUsed       bool    `json:"has_percent_used,omitempty"`  // true when metric was present (even if 0)
+	HasPercentUsed       bool    `json:"has_percent_used,omitempty"` // true when metric was present (even if 0)
 	ReallocatedSectors   float64 `json:"reallocated_sectors,omitempty"`
 	PendingSectors       float64 `json:"pending_sectors,omitempty"`
 	OfflineUncorrectable float64 `json:"offline_uncorrectable,omitempty"`
