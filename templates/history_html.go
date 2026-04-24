@@ -362,6 +362,10 @@ canvas#chart { display:block; width:100%; }
   async function loadSeries() {
     try {
       const res = await fetch('/api/history/series');
+      if (!res.ok) {
+        document.getElementById('series-loading').textContent = 'Failed to load series (' + res.status + ').';
+        return;
+      }
       allSeries = await res.json();
       buildTree();
     } catch (e) {
@@ -510,6 +514,7 @@ canvas#chart { display:block; width:100%; }
       const url = '/api/history/query?key=' + encodeURIComponent(key) +
         '&from=' + from + '&to=' + now + '&bucket=' + bucket;
       const res = await fetch(url);
+      if (!res.ok) throw new Error('query failed (' + res.status + ') for ' + key);
       const points = await res.json();
       return { key, info: allSeries.find(s => s.key === key), points };
     });
@@ -725,6 +730,7 @@ canvas#chart { display:block; width:100%; }
     if (metric === 'alloc_bytes' || metric === 'free_bytes') return fmtBytes(v * (1 << 20));
     if (metric === 'used_pct' || metric === 'wear_pct') return v.toFixed(1) + '%';
     if (metric === 'temp_c') return v.toFixed(1) + '°';
+    if (metric === 'pow_hrs') return v.toFixed(0) + 'h';
     if (v >= 1e6) return (v/1e6).toFixed(1) + 'M';
     if (v >= 1e3) return (v/1e3).toFixed(1) + 'K';
     return v.toFixed(1);

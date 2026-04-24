@@ -144,11 +144,13 @@ func Start(cfg *config.Config) error {
 		return fmt.Errorf("template parse: %w", err)
 	}
 
-	histTmpl, err := template.New("history").Funcs(funcMap()).Parse(templates.History)
-	if err != nil {
-		return fmt.Errorf("history template parse: %w", err)
+	var histTmpl *template.Template
+	if histStore != nil {
+		histTmpl, err = template.New("history").Funcs(funcMap()).Parse(templates.History)
+		if err != nil {
+			return fmt.Errorf("history template parse: %w", err)
+		}
 	}
-	_ = histTmpl // used below only when history enabled
 
 	app := fiber.New(fiber.Config{
 		AppName:      "zfs-dash",
@@ -325,14 +327,17 @@ func Start(cfg *config.Config) error {
 				bucketSecs = v
 			}
 
+			if fromUnix < 0 || toUnix < 0 {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "timestamps must be non-negative"})
+			}
 			now := time.Now()
 			to := now
-			from := now.Add(-24 * time.Hour) // default: last 24h
-			if fromUnix > 0 {
-				from = time.Unix(fromUnix, 0)
-			}
 			if toUnix > 0 {
 				to = time.Unix(toUnix, 0)
+			}
+			from := to.Add(-24 * time.Hour) // default: 24h before to
+			if fromUnix > 0 {
+				from = time.Unix(fromUnix, 0)
 			}
 
 			points, err := histStore.Query(key, from, to, bucketSecs)
