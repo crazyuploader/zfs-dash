@@ -260,6 +260,7 @@ func Start(cfg *config.Config) error {
 		data.HistoryEnabled = histStore != nil
 
 		setCacheHeaders(c, f, isCached)
+		c.Set("Cache-Control", "no-store")
 		var buf bytes.Buffer
 		if err := tmpl.Execute(&buf, data); err != nil {
 			slog.Error("template execution failed", "error", err)
@@ -280,6 +281,7 @@ func Start(cfg *config.Config) error {
 				return fiber.ErrInternalServerError
 			}
 			c.Set("Content-Type", "text/html; charset=utf-8")
+			c.Set("Cache-Control", "no-store")
 			return c.Send(buf.Bytes())
 		})
 
