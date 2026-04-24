@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/crazyuploader/zfs-dash/internal/config"
 	"github.com/crazyuploader/zfs-dash/internal/fetcher"
+	"github.com/crazyuploader/zfs-dash/internal/history"
 	"github.com/crazyuploader/zfs-dash/internal/model"
 	"github.com/crazyuploader/zfs-dash/templates"
 	"github.com/gofiber/fiber/v3"
@@ -57,12 +59,12 @@ const (
 // nodeView is the subset of NodeData serialized into the page's inline JS.
 // URL is intentionally excluded to avoid exposing internal scrape endpoints to browsers.
 type nodeView struct {
-	Label        string              `json:"label"`
-	Location     string              `json:"location,omitempty"`
-	ExporterInfo model.ExporterInfo  `json:"exporter_info,omitempty"`
-	SmartctlInfo model.SmartctlInfo  `json:"smartctl_info,omitempty"`
-	Pools        []model.Pool        `json:"pools"`
-	Disks        []model.DiskInfo    `json:"disks,omitempty"`
+	Label        string             `json:"label"`
+	Location     string             `json:"location,omitempty"`
+	ExporterInfo model.ExporterInfo `json:"exporter_info,omitempty"`
+	SmartctlInfo model.SmartctlInfo `json:"smartctl_info,omitempty"`
+	Pools        []model.Pool       `json:"pools"`
+	Disks        []model.DiskInfo   `json:"disks,omitempty"`
 }
 
 // templateData is the data passed to the HTML template.
@@ -77,6 +79,7 @@ type templateData struct {
 	DegradedPools    int
 	ErroredPools     int
 	TotalNodes       int
+	HistoryEnabled   bool
 }
 
 // Start registers routes and begins listening.
@@ -90,6 +93,13 @@ func Start(cfg *config.Config) error {
 
 	f := fetcher.New(cfg.Endpoints, cfg.CacheTTL)
 	hub := newHub()
+
+	// Graceful shutdown context — cancelled on SIGTERM/SIGINT.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	shutdownSigs := make(chan os.Signal, 1)
+	signal.Notify(shutdownSigs, syscall.SIGTERM, os.Interrupt)
 
 	// Hot-reload config on SIGHUP
 	sigs := make(chan os.Signal, 1)
@@ -109,9 +119,37 @@ func Start(cfg *config.Config) error {
 		}
 	}()
 
+	// History store and recorder (optional).
+	var histStore *history.Store
+	if cfg.History.Enabled {
+		var err error
+		histStore, err = history.Open(cfg.History.Path, cfg.History.Retention)
+		if err != nil {
+			slog.Error("history store failed to open — history disabled", "error", err, "path", cfg.History.Path)
+			cfg.History.Enabled = false
+		} else {
+			defer func() { _ = histStore.Close() }()
+			recInterval := cfg.History.RecordInterval
+			if recInterval <= 0 {
+				recInterval = cfg.Refresh
+			}
+			rec := history.NewRecorder(histStore, f, recInterval)
+			rec.Start(ctx)
+			slog.Info("history enabled", "path", cfg.History.Path, "retention", cfg.History.Retention, "record_interval", recInterval)
+		}
+	}
+
 	tmpl, err := template.New("dashboard").Funcs(funcMap()).Parse(templates.Dashboard)
 	if err != nil {
 		return fmt.Errorf("template parse: %w", err)
+	}
+
+	var histTmpl *template.Template
+	if histStore != nil {
+		histTmpl, err = template.New("history").Funcs(funcMap()).Parse(templates.History)
+		if err != nil {
+			return fmt.Errorf("history template parse: %w", err)
+		}
 	}
 
 	app := fiber.New(fiber.Config{
@@ -213,16 +251,18 @@ func Start(cfg *config.Config) error {
 	// Dashboard
 	app.Get("/", func(c fiber.Ctx) error {
 		curCfg := cfgPtr.Load()
-		ctx, cancel := context.WithTimeout(c.Context(), httpHandlerTimeout)
+		reqCtx, cancel := context.WithTimeout(c.Context(), httpHandlerTimeout)
 		defer cancel()
 
-		nodes, isCached := f.FetchAll(ctx)
+		nodes, isCached := f.FetchAll(reqCtx)
 		if !isCached {
 			hub.broadcast()
 		}
 		data := buildTemplateData(nodes, curCfg)
+		data.HistoryEnabled = histStore != nil
 
 		setCacheHeaders(c, f, isCached)
+		c.Set("Cache-Control", "no-store")
 		var buf bytes.Buffer
 		if err := tmpl.Execute(&buf, data); err != nil {
 			slog.Error("template execution failed", "error", err)
@@ -233,9 +273,99 @@ func Start(cfg *config.Config) error {
 		return c.Send(buf.Bytes())
 	})
 
+	// History page + API (only when history is enabled)
+	if histStore != nil {
+		app.Get("/history", func(c fiber.Ctx) error {
+			curCfg := cfgPtr.Load()
+			var buf bytes.Buffer
+			if err := histTmpl.Execute(&buf, map[string]any{"RefreshSecs": int(curCfg.Refresh.Seconds())}); err != nil {
+				slog.Error("history template execution failed", "error", err)
+				return fiber.ErrInternalServerError
+			}
+			c.Set("Content-Type", "text/html; charset=utf-8")
+			c.Set("Cache-Control", "no-store")
+			return c.Send(buf.Bytes())
+		})
+
+		app.Get("/api/history/series", rl, func(c fiber.Ctx) error {
+			series, err := histStore.ListSeries()
+			if err != nil {
+				slog.Error("history list series failed", "error", err)
+				return fiber.ErrInternalServerError
+			}
+			if series == nil {
+				series = []history.SeriesInfo{}
+			}
+			return c.JSON(series)
+		})
+
+		app.Get("/api/history/query", rl, func(c fiber.Ctx) error {
+			key := c.Query("key")
+			if key == "" {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "key required"})
+			}
+			var fromUnix, toUnix, bucketSecs int64
+			if s := c.Query("from"); s != "" {
+				v, err := strconv.ParseInt(s, 10, 64)
+				if err != nil {
+					return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid from"})
+				}
+				fromUnix = v
+			}
+			if s := c.Query("to"); s != "" {
+				v, err := strconv.ParseInt(s, 10, 64)
+				if err != nil {
+					return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid to"})
+				}
+				toUnix = v
+			}
+			if s := c.Query("bucket"); s != "" {
+				v, err := strconv.ParseInt(s, 10, 64)
+				if err != nil {
+					return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid bucket"})
+				}
+				bucketSecs = v
+			}
+
+			if fromUnix < 0 || toUnix < 0 {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "timestamps must be non-negative"})
+			}
+			now := time.Now()
+			to := now
+			if toUnix > 0 {
+				to = time.Unix(toUnix, 0)
+			}
+			from := to.Add(-24 * time.Hour) // default: 24h before to
+			if fromUnix > 0 {
+				from = time.Unix(fromUnix, 0)
+			}
+
+			points, err := histStore.Query(key, from, to, bucketSecs)
+			if err != nil {
+				slog.Error("history query failed", "error", err, "key", key)
+				return fiber.ErrInternalServerError
+			}
+			if points == nil {
+				points = []history.Point{}
+			}
+			return c.JSON(points)
+		})
+	}
+
 	app.Get("/health", func(c fiber.Ctx) error {
 		return c.SendString("OK")
 	})
+
+	// Shutdown on SIGTERM/SIGINT
+	go func() {
+		select {
+		case <-shutdownSigs:
+			slog.Info("shutdown signal received")
+			cancel()
+			_ = app.Shutdown()
+		case <-ctx.Done():
+		}
+	}()
 
 	slog.Info("zfs-dash started", "url", fmt.Sprintf("http://localhost%s", cfg.Addr))
 	return app.Listen(cfg.Addr)
@@ -270,6 +400,7 @@ func buildTemplateData(nodes []model.NodeData, cfg *config.Config) templateData 
 		RefreshSecs: int(cfg.Refresh.Seconds()),
 		FetchedAt:   time.Now().Format("15:04:05"),
 		TotalNodes:  len(nodes),
+		// HistoryEnabled is set by the caller after buildTemplateData returns.
 	}
 	for _, n := range nodes {
 		if n.Error != "" {

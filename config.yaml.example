@@ -6,6 +6,15 @@ log_format: "text" # "text" or "json"
 debug: false
 trusted_proxies: [] # e.g., ["127.0.0.1", "100.64.0.0/10"]
 
+# ── History (optional) ───────────────────────────────────
+# Records pool usage and disk temperature/wear over time.
+# Accessible at /history once enabled.
+history:
+  enabled: false
+  path: "./data/history.db"   # path to bbolt database file; directory created automatically
+  retention: "720h"           # how long to keep data (e.g. "720h" = 30 days, "168h" = 7 days)
+  record_interval: "5m"       # how often to record samples (default: same as refresh interval)
+
 endpoints:
   - url: "http://host1:9134/metrics"
     label: "node-1"

@@ -16,6 +16,14 @@ type Endpoint struct {
 	SmartctlURL string `mapstructure:"smartctl_url"` // optional; omit to skip disk metrics
 }
 
+// HistoryConfig controls the embedded time-series store.
+type HistoryConfig struct {
+	Enabled        bool
+	Path           string
+	Retention      time.Duration
+	RecordInterval time.Duration
+}
+
 // Config holds all runtime options.
 type Config struct {
 	Endpoints       []Endpoint
@@ -26,10 +34,15 @@ type Config struct {
 	TrustedProxies  []string
 	MaxUsagePercent float64
 	LogFormat       string // "text" or "json"
+	History         HistoryConfig
 }
 
 // Load reads viper state into a validated Config.
 func Load() (*Config, error) {
+	histRetention := viper.GetDuration("history.retention")
+	if histRetention <= 0 {
+		histRetention = 720 * time.Hour // 30 days default
+	}
 	cfg := &Config{
 		Addr:            viper.GetString("addr"),
 		Refresh:         time.Duration(viper.GetInt("refresh")) * time.Second,
@@ -38,6 +51,12 @@ func Load() (*Config, error) {
 		TrustedProxies:  viper.GetStringSlice("trusted_proxies"),
 		MaxUsagePercent: viper.GetFloat64("max_usage_percent"),
 		LogFormat:       cmp.Or(viper.GetString("log_format"), "text"),
+		History: HistoryConfig{
+			Enabled:        viper.GetBool("history.enabled"),
+			Path:           cmp.Or(viper.GetString("history.path"), "./data/history.db"),
+			Retention:      histRetention,
+			RecordInterval: viper.GetDuration("history.record_interval"),
+		},
 	}
 	if cfg.Refresh <= 0 {
 		cfg.Refresh = 300 * time.Second

@@ -8,6 +8,9 @@ services:
       - "8054:8054"
     volumes:
       - ./config.yaml:/config/config.yaml:ro
+      # Uncomment to persist history data across restarts.
+      # Make sure history.path in config.yaml points to /data/history.db
+      # - ./data:/data
     environment:
       - TZ=Asia/Kolkata
     restart: unless-stopped

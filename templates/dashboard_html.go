@@ -943,6 +943,13 @@ button:focus-visible,
     <span class="topbar-refresh">↻&thinsp;{{.RefreshSecs}}s</span>
   </div>
 
+  {{if .HistoryEnabled}}<a class="icon-btn" href="/history" aria-label="History charts" title="History">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+    </svg>
+  </a>{{end}}
+
   <button class="icon-btn" data-theme-toggle aria-label="Toggle light/dark mode">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
          stroke="currentColor" stroke-width="2" aria-hidden="true">
