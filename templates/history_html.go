@@ -685,10 +685,6 @@ canvas#chart { display:block; width:100%; }
       // Short name: last segment, trimmed to ~12 chars
       const rawName = s.info ? s.info.name.replace(/^.*\/([^/]+)$/, '$1') : s.key;
       const shortName = rawName.length > 14 ? rawName.slice(0, 12) + '…' : rawName;
-      const metricLabel = s.info ? (METRIC_SHORT[s.info.metric] !== undefined
-        ? fmtValFull(nearest.v, s.info.metric)
-        : fmtValFull(nearest.v, s.info.metric)) : nearest.v.toFixed(2);
-
       const row = document.createElement('div');
       row.className = 'tooltip-row';
       row.innerHTML =

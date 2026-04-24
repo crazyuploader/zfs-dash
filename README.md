@@ -56,11 +56,12 @@ endpoints:
 
 ## History
 
-When `history.enabled: true`, zfs-dash records pool usage and disk metrics (temperature, wear, power-on hours) to a local [bbolt](https://github.com/etcd-io/bbolt) database on every refresh cycle.
+When `history.enabled: true`, zfs-dash records pool usage and disk metrics (temperature, wear, power-on hours) to a local [bbolt](https://github.com/etcd-io/bbolt) database. Samples are written at the cadence set by `history.record_interval` (defaults to `refresh` when not configured).
 
 Access charts at **`/history`** — a link appears in the dashboard topbar when enabled.
 
 **Recorded metrics:**
+
 | Series | Description |
 |--------|-------------|
 | `pool/{name}/used_pct` | Pool used % |
