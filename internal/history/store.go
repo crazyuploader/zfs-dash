@@ -71,8 +71,9 @@ func (s *Store) Close() error {
 }
 
 // SeriesKey builds a canonical series key from its components.
+// Uses unit separator (0x1f) to avoid collisions with user data.
 func SeriesKey(node, kind, name, metric string) string {
-	return node + "|" + kind + "|" + name + "|" + metric
+	return node + "\x1f" + kind + "\x1f" + name + "\x1f" + metric
 }
 
 // WriteBatch writes multiple samples in a single transaction.
@@ -210,7 +211,7 @@ func (s *Store) ListSeries() ([]SeriesInfo, error) {
 				return nil // skip non-bucket values
 			}
 			key := string(k)
-			parts := strings.SplitN(key, "|", 4)
+			parts := strings.SplitN(key, "\x1f", 4)
 			if len(parts) != 4 {
 				return nil
 			}

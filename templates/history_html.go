@@ -454,13 +454,15 @@ canvas#chart { display:block; width:100%; }
     const labelColor = isDark ? '#85858f' : '#62626b';
     const Y_STEPS = 4;
     ctx.font = '11px ' + getComputedStyle(document.body).getPropertyValue('--font-mono').trim();
+    // Use the first active series' metric for Y-axis labels (best effort when mixing metrics)
+    const yAxisMetric = activeSeries[0]?.info?.metric || metrics[0];
     for (let i = 0; i <= Y_STEPS; i++) {
       const v = yMin + (yMax - yMin) * (i / Y_STEPS);
       const y = yScale(v);
       ctx.strokeStyle = gridColor; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(W - PAD.right, y); ctx.stroke();
       ctx.fillStyle = labelColor; ctx.textAlign = 'right';
-      ctx.fillText(fmtVal(v, metrics[0]), PAD.left - 6, y + 4);
+      ctx.fillText(fmtVal(v, yAxisMetric), PAD.left - 6, y + 4);
     }
 
     // X labels
@@ -522,7 +524,7 @@ canvas#chart { display:block; width:100%; }
     }
 
     // Store render state for tooltip
-    canvas._renderState = { xScale, yScale, tsSpan, minTs, maxTs, yMin, yMax, plotW, plotH, W, H, metrics };
+    canvas._renderState = { xScale, yScale, tsSpan, minTs, maxTs, yMin, yMax, plotW, plotH, W, H };
   }
 
   /* ── Tooltip ── */
@@ -548,11 +550,12 @@ canvas#chart { display:block; width:100%; }
       }
       const color = colorMap[s.key] || COLORS[0];
       const shortName = s.info ? s.info.name.replace(/^.*\/([^/]+)$/, '$1') : s.key;
+      const seriesMetric = s.info?.metric;
       const row = document.createElement('div');
       row.className = 'tooltip-row';
       row.innerHTML = '<span class="tooltip-dot" style="background:' + color + '"></span>' +
         '<span style="color:var(--text-muted);font-size:0.72rem">' + escHtml(shortName) + '</span>' +
-        '<span style="margin-left:auto;color:var(--text)">' + fmtValFull(nearest.v, rs.metrics[0]) + '</span>';
+        '<span style="margin-left:auto;color:var(--text)">' + fmtValFull(nearest.v, seriesMetric) + '</span>';
       ttRows.appendChild(row);
     }
 
@@ -566,7 +569,7 @@ canvas#chart { display:block; width:100%; }
 
   /* ── Helpers ── */
   function fmtVal(v, metric) {
-    if (metric === 'alloc_bytes' || metric === 'free_bytes') return fmtBytes(v);
+    if (metric === 'alloc_bytes' || metric === 'free_bytes') return fmtBytes(v * (1 << 20)); // Convert MiB to bytes
     if (metric === 'used_pct' || metric === 'wear_pct') return v.toFixed(1) + '%';
     if (metric === 'temp_c') return v.toFixed(1) + '°';
     if (v >= 1e6) return (v/1e6).toFixed(1) + 'M';
@@ -574,7 +577,7 @@ canvas#chart { display:block; width:100%; }
     return v.toFixed(1);
   }
   function fmtValFull(v, metric) {
-    if (metric === 'alloc_bytes' || metric === 'free_bytes') return fmtBytes(v);
+    if (metric === 'alloc_bytes' || metric === 'free_bytes') return fmtBytes(v * (1 << 20)); // Convert MiB to bytes
     if (metric === 'used_pct' || metric === 'wear_pct') return v.toFixed(2) + '%';
     if (metric === 'temp_c') return v.toFixed(1) + ' °C';
     if (metric === 'pow_hrs') return v.toFixed(1) + ' h';

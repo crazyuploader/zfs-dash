@@ -125,7 +125,8 @@ func Start(cfg *config.Config) error {
 		var err error
 		histStore, err = history.Open(cfg.History.Path, cfg.History.Retention)
 		if err != nil {
-			slog.Warn("history store unavailable — history disabled", "error", err, "path", cfg.History.Path)
+			slog.Error("history store failed to open — history disabled", "error", err, "path", cfg.History.Path)
+			cfg.History.Enabled = false
 		} else {
 			defer func() { _ = histStore.Close() }()
 			recInterval := cfg.History.RecordInterval
@@ -272,8 +273,9 @@ func Start(cfg *config.Config) error {
 	// History page + API (only when history is enabled)
 	if histStore != nil {
 		app.Get("/history", func(c fiber.Ctx) error {
+			curCfg := cfgPtr.Load()
 			var buf bytes.Buffer
-			if err := histTmpl.Execute(&buf, map[string]any{"RefreshSecs": int(cfg.Refresh.Seconds())}); err != nil {
+			if err := histTmpl.Execute(&buf, map[string]any{"RefreshSecs": int(curCfg.Refresh.Seconds())}); err != nil {
 				slog.Error("history template execution failed", "error", err)
 				return fiber.ErrInternalServerError
 			}

@@ -67,14 +67,16 @@ func (r *Recorder) record(ctx context.Context) {
 			})
 			if pool.Allocated > 0 {
 				samples = append(samples, Sample{
-					Key: SeriesKey(node.Label, "pool", pool.Name, "alloc_bytes"),
-					Ts:  now, Value: pool.Allocated,
+					Key:   SeriesKey(node.Label, "pool", pool.Name, "alloc_bytes"),
+					Ts:    now,
+					Value: pool.Allocated / (1 << 20), // Store in MiB to avoid float32 precision loss
 				})
 			}
 			if pool.Free > 0 {
 				samples = append(samples, Sample{
-					Key: SeriesKey(node.Label, "pool", pool.Name, "free_bytes"),
-					Ts:  now, Value: pool.Free,
+					Key:   SeriesKey(node.Label, "pool", pool.Name, "free_bytes"),
+					Ts:    now,
+					Value: pool.Free / (1 << 20), // Store in MiB to avoid float32 precision loss
 				})
 			}
 		}
