@@ -5,6 +5,7 @@ const historyHTML = `<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark light">
 <title>ZFS Dashboard — History</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cellipse cx='16' cy='9' rx='12' ry='4' fill='%234f8ef7'/%3E%3Cpath d='M4 9v7c0 2.21 5.37 4 12 4s12-1.79 12-4V9c0 2.21-5.37 4-12 4S4 11.21 4 9z' fill='%233a7bd5'/%3E%3Cpath d='M4 16v7c0 2.21 5.37 4 12 4s12-1.79 12-4v-7c0 2.21-5.37 4-12 4S4 18.21 4 16z' fill='%232563b0'/%3E%3C/svg%3E">
 <style>
@@ -35,7 +36,11 @@ const historyHTML = `<!DOCTYPE html>
   --shadow-md: 0 4px 20px rgba(0,0,0,0.09);
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { -webkit-font-smoothing: antialiased; }
+html { -webkit-font-smoothing: antialiased; color-scheme: dark; }
+html[data-theme="light"] { color-scheme: light; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
 body {
   font-family: var(--font-body); font-size: var(--text-base);
   background: var(--bg); color: var(--text);
@@ -56,7 +61,7 @@ body {
 .topbar-spacer { flex:1; }
 .back-link { display:flex; align-items:center; gap:var(--space-2); color:var(--text-muted); text-decoration:none; font-size:var(--text-sm); padding:0.35rem 0.75rem; border-radius:var(--radius-full); border:1px solid var(--border); transition:var(--transition); }
 .back-link:hover { color:var(--text); border-color:var(--border-hi); }
-.icon-btn { display:flex; align-items:center; justify-content:center; width:36px; height:36px; border:1px solid var(--border); border-radius:var(--radius-md); background:transparent; color:var(--text-muted); cursor:pointer; transition:var(--transition); }
+.icon-btn { display:flex; align-items:center; justify-content:center; width:36px; height:36px; border:1px solid var(--border); border-radius:var(--radius-md); background:transparent; color:var(--text-muted); cursor:pointer; transition:var(--transition); touch-action:manipulation; }
 .icon-btn:hover { color:var(--text); border-color:var(--border-hi); }
 
 /* ── Layout ── */
@@ -74,7 +79,7 @@ body {
 .range-pill {
   padding:0.25rem 0.75rem; border-radius:var(--radius-full); border:1px solid var(--border);
   background:transparent; color:var(--text-muted); font-size:var(--text-sm); cursor:pointer;
-  font-family:var(--font-mono); transition:var(--transition);
+  font-family:var(--font-mono); transition:var(--transition); touch-action:manipulation;
 }
 .range-pill:hover { border-color:var(--border-hi); color:var(--text); }
 .range-pill.active { background:var(--primary); border-color:var(--primary); color:#fff; }
@@ -91,7 +96,7 @@ body {
   font-size:var(--text-sm); min-width:0; overflow:hidden;
 }
 .series-item:hover { background:var(--surface-2); }
-.series-item input[type=checkbox] { accent-color:var(--primary); cursor:pointer; flex-shrink:0; }
+.series-item input[type=checkbox] { accent-color:var(--primary); cursor:pointer; flex-shrink:0; touch-action:manipulation; }
 .series-item-label { min-width:0; flex:1; font-family:var(--font-mono); display:flex; flex-direction:column; gap:0.05rem; }
 .series-item-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); font-size:0.78rem; }
 .series-item-metric { color:var(--text-faint); font-size:0.7rem; white-space:nowrap; }
@@ -105,6 +110,7 @@ body {
   display:flex; flex-direction:column; gap:var(--space-3);
 }
 .chart-title { font-size:var(--text-sm); font-weight:600; color:var(--text-muted); }
+.chart-num { font-variant-numeric:tabular-nums; }
 .chart-canvas-wrap { position:relative; width:100%; }
 canvas#chart { display:block; width:100%; }
 .chart-empty { height:200px; display:flex; align-items:center; justify-content:center; color:var(--text-faint); font-size:var(--text-sm); }
@@ -120,9 +126,9 @@ canvas#chart { display:block; width:100%; }
   border-radius:var(--radius-md); padding:0.4rem 0.75rem;
   font-size:var(--text-sm); font-family:var(--font-mono);
   box-shadow:var(--shadow-md); display:none;
-  max-width:220px;
+  max-width:220px; font-variant-numeric:tabular-nums;
 }
-.tooltip-time { color:var(--text-muted); font-size:0.72rem; margin-bottom:0.2rem; }
+.tooltip-time { color:var(--text-muted); font-size:0.72rem; margin-bottom:0.2rem; font-variant-numeric:tabular-nums; }
 .tooltip-row { display:flex; align-items:center; gap:var(--space-2); }
 .tooltip-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
 
@@ -176,7 +182,7 @@ canvas#chart { display:block; width:100%; }
     </div>
     <div>
       <div class="sidebar-label">Series</div>
-      <div class="series-tree" id="series-tree">
+      <div class="series-tree" id="series-tree" aria-live="polite" aria-label="Series list">
         <div class="series-empty" id="series-loading">Loading…</div>
       </div>
     </div>
@@ -214,6 +220,7 @@ canvas#chart { display:block; width:100%; }
   }
   function applyTheme(t) {
     document.documentElement.setAttribute('data-theme', t);
+    document.documentElement.style.colorScheme = t;
     themeBtn.innerHTML = t === 'dark' ? moonSVG : sunSVG;
     themeBtn.setAttribute('aria-label', 'Switch to ' + (t === 'dark' ? 'light' : 'dark') + ' mode');
   }

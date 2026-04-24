@@ -43,6 +43,7 @@ func init() {
 	rootCmd.PersistentFlags().Bool("history-enabled", false, "enable time-series history storage")
 	rootCmd.PersistentFlags().String("history-path", "./data/history.db", "path to history database file")
 	rootCmd.PersistentFlags().Duration("history-retention", 0, "history retention period (e.g. 720h = 30 days; 0 uses config default)")
+	rootCmd.PersistentFlags().Duration("history-record-interval", 0, "how often to record history samples (e.g. 5m; 0 uses refresh interval)")
 
 	mustBindPFlag("endpoints", "endpoints")
 	mustBindPFlag("addr", "addr")
@@ -54,6 +55,7 @@ func init() {
 	mustBindPFlag("history.enabled", "history-enabled")
 	mustBindPFlag("history.path", "history-path")
 	mustBindPFlag("history.retention", "history-retention")
+	mustBindPFlag("history.record_interval", "history-record-interval")
 }
 
 func initConfig() {

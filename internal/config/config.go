@@ -18,9 +18,10 @@ type Endpoint struct {
 
 // HistoryConfig controls the embedded time-series store.
 type HistoryConfig struct {
-	Enabled   bool
-	Path      string
-	Retention time.Duration
+	Enabled        bool
+	Path           string
+	Retention      time.Duration
+	RecordInterval time.Duration
 }
 
 // Config holds all runtime options.
@@ -51,9 +52,10 @@ func Load() (*Config, error) {
 		MaxUsagePercent: viper.GetFloat64("max_usage_percent"),
 		LogFormat:       cmp.Or(viper.GetString("log_format"), "text"),
 		History: HistoryConfig{
-			Enabled:   viper.GetBool("history.enabled"),
-			Path:      cmp.Or(viper.GetString("history.path"), "./data/history.db"),
-			Retention: histRetention,
+			Enabled:        viper.GetBool("history.enabled"),
+			Path:           cmp.Or(viper.GetString("history.path"), "./data/history.db"),
+			Retention:      histRetention,
+			RecordInterval: viper.GetDuration("history.record_interval"),
 		},
 	}
 	if cfg.Refresh <= 0 {

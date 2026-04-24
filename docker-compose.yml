@@ -10,7 +10,7 @@ services:
       - ./config.yaml:/config/config.yaml:ro
       # Uncomment to persist history data across restarts.
       # Make sure history.path in config.yaml points to /data/history.db
-      # - zfs-dash-data:/data
+      # - ./data:/data
     environment:
       - TZ=Asia/Kolkata
     restart: unless-stopped
@@ -28,6 +28,3 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
-
-# volumes:
-#   zfs-dash-data:

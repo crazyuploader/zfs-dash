@@ -25,6 +25,7 @@ Open `http://localhost:8054`.
 - `--history-enabled`: Enable time-series history storage (default: `false`).
 - `--history-path`: Path to history database file (default: `./data/history.db`).
 - `--history-retention`: Retention period, e.g. `720h` for 30 days (default: `720h`).
+- `--history-record-interval`: How often to record history samples, e.g. `5m` (default: same as `--refresh`).
 
 ## Config
 
@@ -40,7 +41,8 @@ trusted_proxies: [] # e.g., ["127.0.0.1", "100.64.0.0/10"]
 history:
   enabled: false
   path: "./data/history.db"
-  retention: "720h" # 30 days; supports any Go duration string
+  retention: "720h"        # 30 days; supports any Go duration string
+  record_interval: "5m"    # sample frequency; defaults to refresh interval
 
 endpoints:
   - url: "http://host1:9134/metrics"

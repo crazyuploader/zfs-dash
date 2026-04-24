@@ -102,7 +102,7 @@ func (s *Store) WriteBatch(samples []Sample) error {
 // Query returns samples for key in [from, to].
 // If bucketSecs > 0, time-bucketed averages are returned instead of raw points.
 func (s *Store) Query(key string, from, to time.Time, bucketSecs int64) ([]Point, error) {
-	var points []Point
+	points := []Point{}
 	err := s.db.View(func(tx *bolt.Tx) error {
 		parent := tx.Bucket(bucketSeries)
 		b := parent.Bucket([]byte(key))
@@ -202,7 +202,7 @@ func (s *Store) Prune() error {
 
 // ListSeries returns metadata for all stored series.
 func (s *Store) ListSeries() ([]SeriesInfo, error) {
-	var series []SeriesInfo
+	series := []SeriesInfo{}
 	err := s.db.View(func(tx *bolt.Tx) error {
 		parent := tx.Bucket(bucketSeries)
 		return parent.ForEach(func(k, v []byte) error {

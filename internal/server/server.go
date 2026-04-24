@@ -128,9 +128,13 @@ func Start(cfg *config.Config) error {
 			slog.Warn("history store unavailable — history disabled", "error", err, "path", cfg.History.Path)
 		} else {
 			defer func() { _ = histStore.Close() }()
-			rec := history.NewRecorder(histStore, f, cfg.Refresh)
+			recInterval := cfg.History.RecordInterval
+			if recInterval <= 0 {
+				recInterval = cfg.Refresh
+			}
+			rec := history.NewRecorder(histStore, f, recInterval)
 			rec.Start(ctx)
-			slog.Info("history enabled", "path", cfg.History.Path, "retention", cfg.History.Retention)
+			slog.Info("history enabled", "path", cfg.History.Path, "retention", cfg.History.Retention, "record_interval", recInterval)
 		}
 	}
 
@@ -294,9 +298,28 @@ func Start(cfg *config.Config) error {
 			if key == "" {
 				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "key required"})
 			}
-			fromUnix, _ := strconv.ParseInt(c.Query("from"), 10, 64)
-			toUnix, _ := strconv.ParseInt(c.Query("to"), 10, 64)
-			bucketSecs, _ := strconv.ParseInt(c.Query("bucket", "0"), 10, 64)
+			var fromUnix, toUnix, bucketSecs int64
+			if s := c.Query("from"); s != "" {
+				v, err := strconv.ParseInt(s, 10, 64)
+				if err != nil {
+					return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid from"})
+				}
+				fromUnix = v
+			}
+			if s := c.Query("to"); s != "" {
+				v, err := strconv.ParseInt(s, 10, 64)
+				if err != nil {
+					return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid to"})
+				}
+				toUnix = v
+			}
+			if s := c.Query("bucket", "0"); s != "" {
+				v, err := strconv.ParseInt(s, 10, 64)
+				if err != nil {
+					return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid bucket"})
+				}
+				bucketSecs = v
+			}
 
 			now := time.Now()
 			to := now
