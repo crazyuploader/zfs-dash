@@ -68,6 +68,7 @@ type DiskInfo struct {
 	Interface            string  `json:"interface,omitempty"`   // "sat", "nvme", "scsi"
 	FormFactor           string  `json:"form_factor,omitempty"` // "3.5 inches", ""
 	Temperature          float64 `json:"temperature"`           // °C current, 0 if unknown
+	HasTemperature       bool    `json:"has_temperature,omitempty"` // true when current temp metric was present (even if 0)
 	TempMin              float64 `json:"temp_min,omitempty"`    // lifetime min °C
 	TempMax              float64 `json:"temp_max,omitempty"`    // lifetime max °C
 	TempTrip             float64 `json:"temp_trip,omitempty"`   // hardware trip/critical °C
@@ -235,6 +236,7 @@ func ExtractDisks(samples []parser.Sample) []DiskInfo {
 			switch s.Labels["temperature_type"] {
 			case "current":
 				d.Temperature = s.Value
+				d.HasTemperature = true
 			case "drive_trip":
 				d.TempTrip = s.Value
 			case "lifetime_min":

@@ -319,7 +319,7 @@ func Start(cfg *config.Config) error {
 				}
 				toUnix = v
 			}
-			if s := c.Query("bucket", "0"); s != "" {
+			if s := c.Query("bucket"); s != "" {
 				v, err := strconv.ParseInt(s, 10, 64)
 				if err != nil {
 					return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid bucket"})
@@ -358,10 +358,13 @@ func Start(cfg *config.Config) error {
 
 	// Shutdown on SIGTERM/SIGINT
 	go func() {
-		<-shutdownSigs
-		slog.Info("shutdown signal received")
-		cancel()
-		_ = app.Shutdown()
+		select {
+		case <-shutdownSigs:
+			slog.Info("shutdown signal received")
+			cancel()
+			_ = app.Shutdown()
+		case <-ctx.Done():
+		}
 	}()
 
 	slog.Info("zfs-dash started", "url", fmt.Sprintf("http://localhost%s", cfg.Addr))

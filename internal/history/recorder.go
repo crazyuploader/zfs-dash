@@ -16,7 +16,12 @@ type Recorder struct {
 }
 
 // NewRecorder creates a Recorder that polls at the given interval.
+// interval is clamped to a minimum of 1 second to prevent a zero/negative
+// duration from causing time.NewTicker to panic.
 func NewRecorder(store *Store, f *fetcher.Fetcher, interval time.Duration) *Recorder {
+	if interval < time.Second {
+		interval = time.Second
+	}
 	return &Recorder{store: store, fetcher: f, interval: interval}
 }
 
@@ -81,7 +86,7 @@ func (r *Recorder) record(ctx context.Context) {
 			}
 		}
 		for _, disk := range node.Disks {
-			if disk.Temperature > 0 {
+			if disk.HasTemperature {
 				samples = append(samples, Sample{
 					Key: SeriesKey(node.Label, "disk", disk.Device, "temp_c"),
 					Ts:  now, Value: disk.Temperature,

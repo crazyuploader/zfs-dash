@@ -83,10 +83,21 @@ func (s *Store) WriteBatch(samples []Sample) error {
 	}
 	return s.db.Update(func(tx *bolt.Tx) error {
 		parent := tx.Bucket(bucketSeries)
+		// Cache bucket handles within the transaction to avoid redundant lookups
+		// when multiple samples share the same series key.
+		buckets := make(map[string]*bolt.Bucket, len(samples))
 		for _, sp := range samples {
-			b, err := parent.CreateBucketIfNotExists([]byte(sp.Key))
-			if err != nil {
-				return err
+			if sp.Ts.Unix() < 0 {
+				continue // skip invalid timestamps
+			}
+			b, ok := buckets[sp.Key]
+			if !ok {
+				var err error
+				b, err = parent.CreateBucketIfNotExists([]byte(sp.Key))
+				if err != nil {
+					return err
+				}
+				buckets[sp.Key] = b
 			}
 			var k [4]byte
 			binary.BigEndian.PutUint32(k[:], uint32(sp.Ts.Unix()))
@@ -165,19 +176,34 @@ func (s *Store) Query(key string, from, to time.Time, bucketSecs int64) ([]Point
 
 // Prune deletes samples older than the retention period.
 // No-op when retention <= 0.
+// Uses a read transaction to collect series names, then a short write
+// transaction per series to avoid holding the write lock for the full scan.
 func (s *Store) Prune() error {
 	if s.retention <= 0 {
 		return nil
 	}
 	cutoffTs := uint32(time.Now().Add(-s.retention).Unix())
 
-	return s.db.Update(func(tx *bolt.Tx) error {
-		parent := tx.Bucket(bucketSeries)
-		return parent.ForEach(func(name, val []byte) error {
+	// Collect series names under a cheap read lock.
+	var seriesNames [][]byte
+	if err := s.db.View(func(tx *bolt.Tx) error {
+		return tx.Bucket(bucketSeries).ForEach(func(name, val []byte) error {
 			if val != nil {
-				return nil // skip non-bucket entries
+				return nil // skip non-bucket values
 			}
-			b := parent.Bucket(name)
+			cp := make([]byte, len(name))
+			copy(cp, name)
+			seriesNames = append(seriesNames, cp)
+			return nil
+		})
+	}); err != nil {
+		return err
+	}
+
+	// Delete stale keys one series at a time to keep write transactions short.
+	for _, name := range seriesNames {
+		if err := s.db.Update(func(tx *bolt.Tx) error {
+			b := tx.Bucket(bucketSeries).Bucket(name)
 			if b == nil {
 				return nil
 			}
@@ -197,8 +223,11 @@ func (s *Store) Prune() error {
 				}
 			}
 			return nil
-		})
-	})
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ListSeries returns metadata for all stored series.
