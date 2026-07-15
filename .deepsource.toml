@@ -5,8 +5,8 @@ name = "go"
 enabled = true
 
   [analyzers.meta]
-  import_path = "github.com/crazyuploader/zfs-dash"
+  import_root = "github.com/crazyuploader/zfs-dash"
 
-[[transformers]]
+[[code_formatters]]
 name = "go"
 enabled = true
