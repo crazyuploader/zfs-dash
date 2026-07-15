@@ -65,6 +65,11 @@ func Open(path string, retention time.Duration) (*Store, error) {
 	return &Store{db: db, retention: retention}, nil
 }
 
+// Retention returns the configured retention duration.
+func (s *Store) Retention() time.Duration {
+	return s.retention
+}
+
 // Close closes the database.
 func (s *Store) Close() error {
 	return s.db.Close()

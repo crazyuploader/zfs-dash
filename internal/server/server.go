@@ -278,7 +278,10 @@ func Start(cfg *config.Config) error {
 		app.Get("/history", func(c fiber.Ctx) error {
 			curCfg := cfgPtr.Load()
 			var buf bytes.Buffer
-			if err := histTmpl.Execute(&buf, map[string]any{"RefreshSecs": int(curCfg.Refresh.Seconds())}); err != nil {
+			if err := histTmpl.Execute(&buf, map[string]any{
+				"RefreshSecs":    int(curCfg.Refresh.Seconds()),
+				"RetentionHours": int(histStore.Retention().Hours()),
+			}); err != nil {
 				slog.Error("history template execution failed", "error", err)
 				return fiber.ErrInternalServerError
 			}

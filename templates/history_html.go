@@ -270,7 +270,11 @@ canvas#chart { display:block; width:100%; }
         <button class="range-pill" data-hours="6">6h</button>
         <button class="range-pill active" data-hours="24">24h</button>
         <button class="range-pill" data-hours="168">7d</button>
-        <button class="range-pill" data-hours="720">30d</button>
+        {{if ge .RetentionHours 720}}<button class="range-pill" data-hours="720">30d</button>{{end}}
+        {{if ge .RetentionHours 1440}}<button class="range-pill" data-hours="1440">60d</button>{{end}}
+        {{if ge .RetentionHours 2160}}<button class="range-pill" data-hours="2160">90d</button>{{end}}
+        {{if ge .RetentionHours 2880}}<button class="range-pill" data-hours="2880">120d</button>{{end}}
+        {{if ge .RetentionHours 8760}}<button class="range-pill" data-hours="8760">1y</button>{{end}}
       </div>
     </div>
     <div>
@@ -496,7 +500,8 @@ canvas#chart { display:block; width:100%; }
     if (hours <= 6)   return 300;
     if (hours <= 24)  return 900;
     if (hours <= 168) return 3600;
-    return 21600;
+    if (hours <= 720) return 21600;
+    return 86400;
   }
 
   /* ── Fetch & render ── */
