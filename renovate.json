@@ -4,6 +4,7 @@
   "automerge": true,
   "rebaseWhen": "conflicted",
   "recreateWhen": "auto",
+  "postUpdateOptions": ["gomodTidy"],
   "lockFileMaintenance": {
     "enabled": true,
     "automerge": true
