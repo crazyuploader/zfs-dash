@@ -10,7 +10,7 @@ COPY . .
 ARG TARGETOS TARGETARCH BUILDPLATFORM
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-w -s" -o zfs-dash .
 
-FROM alpine:3.23
+FROM alpine:3.24
 
 RUN apk --no-cache add ca-certificates tzdata wget
 
