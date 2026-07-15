@@ -8,5 +8,5 @@ enabled = true
   import_root = "github.com/crazyuploader/zfs-dash"
 
 [[code_formatters]]
-name = "go"
+name = "gofmt"
 enabled = true
