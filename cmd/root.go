@@ -22,11 +22,12 @@ var rootCmd = &cobra.Command{
 	SilenceErrors: true,
 }
 
-func Execute() {
+func Execute() error {
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return err
 	}
+	return nil
 }
 
 func init() {
@@ -71,7 +72,7 @@ func initConfig() {
 	viper.AutomaticEnv()
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Fprintln(os.Stderr, "Using config:", viper.ConfigFileUsed())
-		viper.OnConfigChange(func(e fsnotify.Event) {
+		viper.OnConfigChange(func(_ fsnotify.Event) {
 			_ = syscall.Kill(os.Getpid(), syscall.SIGHUP)
 		})
 		viper.WatchConfig()

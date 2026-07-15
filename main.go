@@ -1,7 +1,13 @@
 package main
 
-import "github.com/crazyuploader/zfs-dash/cmd"
+import (
+	"os"
+
+	"github.com/crazyuploader/zfs-dash/cmd"
+)
 
 func main() {
-	cmd.Execute()
+	if err := cmd.Execute(); err != nil {
+		os.Exit(1)
+	}
 }

@@ -102,7 +102,7 @@ func (f *Fetcher) FetchAll(ctx context.Context) ([]model.NodeData, bool) {
 
 // fetchRaw fetches and parses Prometheus text-format metrics from a single URL.
 func (f *Fetcher) fetchRaw(ctx context.Context, label, url string) ([]parser.Sample, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("build request: %w", err)
 	}
@@ -181,7 +181,9 @@ func (f *Fetcher) fetchOne(ctx context.Context, ep config.Endpoint) model.NodeDa
 		return nd
 	}
 
-	allSamples := append(zfsSamples, smartctlSamples...)
+	allSamples := make([]parser.Sample, 0, len(zfsSamples)+len(smartctlSamples))
+	allSamples = append(allSamples, zfsSamples...)
+	allSamples = append(allSamples, smartctlSamples...)
 	nd.Pools = model.ExtractPools(allSamples)
 	nd.ExporterInfo = model.ExtractExporterInfo(allSamples)
 	nd.Disks = model.ExtractDisks(allSamples)

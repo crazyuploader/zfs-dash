@@ -14,7 +14,7 @@ import (
 
 func TestFetcher_Cache(t *testing.T) {
 	var callCount int64
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		atomic.AddInt64(&callCount, 1)
 		_, _ = fmt.Fprintln(w, "zfs_pool_health{pool=\"tank\"} 0")
 	}))
@@ -61,13 +61,13 @@ func TestFetcher_Cache(t *testing.T) {
 
 func TestFetcher_SetEndpoints(t *testing.T) {
 	var callCount int64
-	server1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		atomic.AddInt64(&callCount, 1)
 		_, _ = fmt.Fprintln(w, "zfs_pool_health{pool=\"tank1\"} 0")
 	}))
 	defer server1.Close()
 
-	server2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		atomic.AddInt64(&callCount, 1)
 		_, _ = fmt.Fprintln(w, "zfs_pool_health{pool=\"tank2\"} 0")
 	}))

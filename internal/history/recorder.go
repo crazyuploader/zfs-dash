@@ -25,12 +25,9 @@ func NewRecorder(store *Store, f *fetcher.Fetcher, interval time.Duration) *Reco
 	return &Recorder{store: store, fetcher: f, interval: interval}
 }
 
-// Start begins the background recording loop; returns immediately.
-func (r *Recorder) Start(ctx context.Context) {
-	go r.run(ctx)
-}
-
-func (r *Recorder) run(ctx context.Context) {
+// Run begins the recording loop; blocks until ctx is cancelled.
+// Callers that want a background loop should invoke it as "go rec.Run(ctx)".
+func (r *Recorder) Run(ctx context.Context) {
 	// Initial prune on startup to clean up stale data.
 	if err := r.store.Prune(); err != nil {
 		slog.Warn("history prune failed", "error", err)

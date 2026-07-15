@@ -11,7 +11,7 @@ import (
 var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Start the ZFS dashboard web server",
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, _ []string) error {
 		if err := configInitError(); err != nil {
 			return fmt.Errorf("read config: %w", err)
 		}

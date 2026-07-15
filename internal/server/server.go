@@ -39,7 +39,7 @@ func newHub() *Hub {
 }
 
 func (h *Hub) broadcast() {
-	h.clients.Range(func(key, value any) bool {
+	h.clients.Range(func(key, _ any) bool {
 		ch := key.(chan bool)
 		select {
 		case ch <- true:
@@ -104,39 +104,11 @@ func Start(cfg *config.Config) error {
 	// Hot-reload config on SIGHUP
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGHUP)
-	go func() {
-		for range sigs {
-			slog.Info("SIGHUP received, reloading config...")
-			newCfg, err := config.Load()
-			if err != nil {
-				slog.Error("config reload failed", "error", err)
-				continue
-			}
-			setupLogger(newCfg)
-			f.SetEndpoints(newCfg.Endpoints)
-			cfgPtr.Store(newCfg)
-			slog.Info("config reloaded successfully")
-		}
-	}()
+	go watchConfigReload(sigs, f, &cfgPtr)
 
-	// History store and recorder (optional).
-	var histStore *history.Store
-	if cfg.History.Enabled {
-		var err error
-		histStore, err = history.Open(cfg.History.Path, cfg.History.Retention)
-		if err != nil {
-			slog.Error("history store failed to open — history disabled", "error", err, "path", cfg.History.Path)
-			cfg.History.Enabled = false
-		} else {
-			defer func() { _ = histStore.Close() }()
-			recInterval := cfg.History.RecordInterval
-			if recInterval <= 0 {
-				recInterval = cfg.Refresh
-			}
-			rec := history.NewRecorder(histStore, f, recInterval)
-			rec.Start(ctx)
-			slog.Info("history enabled", "path", cfg.History.Path, "retention", cfg.History.Retention, "record_interval", recInterval)
-		}
+	histStore := setupHistory(ctx, cfg, f)
+	if histStore != nil {
+		defer func() { _ = histStore.Close() }()
 	}
 
 	tmpl, err := template.New("dashboard").Funcs(funcMap()).Parse(templates.Dashboard)
@@ -152,6 +124,70 @@ func Start(cfg *config.Config) error {
 		}
 	}
 
+	app := newFiberApp(cfg)
+
+	rl := limiter.New(limiter.Config{
+		Max:        60,
+		Expiration: 1 * time.Minute,
+	})
+
+	registerSSERoute(app, hub)
+	registerAPIRoutes(app, f, hub, rl, &cfgPtr)
+	registerDashboardRoute(app, f, hub, tmpl, &cfgPtr, histStore)
+	if histStore != nil {
+		registerHistoryRoutes(app, rl, histStore, histTmpl, &cfgPtr)
+	}
+
+	app.Get("/health", func(c fiber.Ctx) error {
+		return c.SendString("OK")
+	})
+
+	// Shutdown on SIGTERM/SIGINT
+	go shutdownOnSignal(shutdownSigs, ctx, cancel, app)
+
+	slog.Info("zfs-dash started", "url", fmt.Sprintf("http://localhost%s", cfg.Addr))
+	return app.Listen(cfg.Addr)
+}
+
+// watchConfigReload reloads config and hot-swaps endpoints whenever sigs fires.
+func watchConfigReload(sigs <-chan os.Signal, f *fetcher.Fetcher, cfgPtr *atomic.Pointer[config.Config]) {
+	for range sigs {
+		slog.Info("SIGHUP received, reloading config...")
+		newCfg, err := config.Load()
+		if err != nil {
+			slog.Error("config reload failed", "error", err)
+			continue
+		}
+		setupLogger(newCfg)
+		f.SetEndpoints(newCfg.Endpoints)
+		cfgPtr.Store(newCfg)
+		slog.Info("config reloaded successfully")
+	}
+}
+
+// setupHistory opens the history store and starts its recorder when enabled.
+// It disables cfg.History.Enabled in place if the store fails to open.
+func setupHistory(ctx context.Context, cfg *config.Config, f *fetcher.Fetcher) *history.Store {
+	if !cfg.History.Enabled {
+		return nil
+	}
+	histStore, err := history.Open(cfg.History.Path, cfg.History.Retention)
+	if err != nil {
+		slog.Error("history store failed to open — history disabled", "error", err, "path", cfg.History.Path)
+		cfg.History.Enabled = false
+		return nil
+	}
+	recInterval := cfg.History.RecordInterval
+	if recInterval <= 0 {
+		recInterval = cfg.Refresh
+	}
+	rec := history.NewRecorder(histStore, f, recInterval)
+	go rec.Run(ctx)
+	slog.Info("history enabled", "path", cfg.History.Path, "retention", cfg.History.Retention, "record_interval", recInterval)
+	return histStore
+}
+
+func newFiberApp(cfg *config.Config) *fiber.App {
 	app := fiber.New(fiber.Config{
 		AppName:      "zfs-dash",
 		ReadTimeout:  httpReadTimeout,
@@ -176,12 +212,10 @@ func Start(cfg *config.Config) error {
 		return c.Next()
 	})
 
-	rl := limiter.New(limiter.Config{
-		Max:        60,
-		Expiration: 1 * time.Minute,
-	})
+	return app
+}
 
-	// SSE Endpoint
+func registerSSERoute(app *fiber.App, hub *Hub) {
 	app.Get("/events", func(c fiber.Ctx) error {
 		c.Set("Content-Type", "text/event-stream")
 		c.Set("Cache-Control", "no-cache")
@@ -225,8 +259,9 @@ func Start(cfg *config.Config) error {
 
 		return nil
 	})
+}
 
-	// JSON API
+func registerAPIRoutes(app *fiber.App, f *fetcher.Fetcher, hub *Hub, rl fiber.Handler, cfgPtr *atomic.Pointer[config.Config]) {
 	app.Get("/api/metrics", rl, func(c fiber.Ctx) error {
 		ctx, cancel := context.WithTimeout(c.Context(), httpHandlerTimeout)
 		defer cancel()
@@ -247,8 +282,9 @@ func Start(cfg *config.Config) error {
 		curCfg := cfgPtr.Load()
 		return serveHealthCheck(c, f, c.Params("label"), c.Params("pool"), curCfg)
 	})
+}
 
-	// Dashboard
+func registerDashboardRoute(app *fiber.App, f *fetcher.Fetcher, hub *Hub, tmpl *template.Template, cfgPtr *atomic.Pointer[config.Config], histStore *history.Store) {
 	app.Get("/", func(c fiber.Ctx) error {
 		curCfg := cfgPtr.Load()
 		reqCtx, cancel := context.WithTimeout(c.Context(), httpHandlerTimeout)
@@ -272,106 +308,100 @@ func Start(cfg *config.Config) error {
 		c.Set("Content-Type", "text/html; charset=utf-8")
 		return c.Send(buf.Bytes())
 	})
+}
 
-	// History page + API (only when history is enabled)
-	if histStore != nil {
-		app.Get("/history", func(c fiber.Ctx) error {
-			curCfg := cfgPtr.Load()
-			var buf bytes.Buffer
-			if err := histTmpl.Execute(&buf, map[string]any{
-				"RefreshSecs":    int(curCfg.Refresh.Seconds()),
-				"RetentionHours": int(histStore.Retention().Hours()),
-			}); err != nil {
-				slog.Error("history template execution failed", "error", err)
-				return fiber.ErrInternalServerError
-			}
-			c.Set("Content-Type", "text/html; charset=utf-8")
-			c.Set("Cache-Control", "no-store")
-			return c.Send(buf.Bytes())
-		})
-
-		app.Get("/api/history/series", rl, func(c fiber.Ctx) error {
-			series, err := histStore.ListSeries()
-			if err != nil {
-				slog.Error("history list series failed", "error", err)
-				return fiber.ErrInternalServerError
-			}
-			if series == nil {
-				series = []history.SeriesInfo{}
-			}
-			return c.JSON(series)
-		})
-
-		app.Get("/api/history/query", rl, func(c fiber.Ctx) error {
-			key := c.Query("key")
-			if key == "" {
-				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "key required"})
-			}
-			var fromUnix, toUnix, bucketSecs int64
-			if s := c.Query("from"); s != "" {
-				v, err := strconv.ParseInt(s, 10, 64)
-				if err != nil {
-					return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid from"})
-				}
-				fromUnix = v
-			}
-			if s := c.Query("to"); s != "" {
-				v, err := strconv.ParseInt(s, 10, 64)
-				if err != nil {
-					return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid to"})
-				}
-				toUnix = v
-			}
-			if s := c.Query("bucket"); s != "" {
-				v, err := strconv.ParseInt(s, 10, 64)
-				if err != nil {
-					return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid bucket"})
-				}
-				bucketSecs = v
-			}
-
-			if fromUnix < 0 || toUnix < 0 {
-				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "timestamps must be non-negative"})
-			}
-			now := time.Now()
-			to := now
-			if toUnix > 0 {
-				to = time.Unix(toUnix, 0)
-			}
-			from := to.Add(-24 * time.Hour) // default: 24h before to
-			if fromUnix > 0 {
-				from = time.Unix(fromUnix, 0)
-			}
-
-			points, err := histStore.Query(key, from, to, bucketSecs)
-			if err != nil {
-				slog.Error("history query failed", "error", err, "key", key)
-				return fiber.ErrInternalServerError
-			}
-			if points == nil {
-				points = []history.Point{}
-			}
-			return c.JSON(points)
-		})
-	}
-
-	app.Get("/health", func(c fiber.Ctx) error {
-		return c.SendString("OK")
+func registerHistoryRoutes(app *fiber.App, rl fiber.Handler, histStore *history.Store, histTmpl *template.Template, cfgPtr *atomic.Pointer[config.Config]) {
+	app.Get("/history", func(c fiber.Ctx) error {
+		curCfg := cfgPtr.Load()
+		var buf bytes.Buffer
+		if err := histTmpl.Execute(&buf, map[string]any{
+			"RefreshSecs":    int(curCfg.Refresh.Seconds()),
+			"RetentionHours": int(histStore.Retention().Hours()),
+		}); err != nil {
+			slog.Error("history template execution failed", "error", err)
+			return fiber.ErrInternalServerError
+		}
+		c.Set("Content-Type", "text/html; charset=utf-8")
+		c.Set("Cache-Control", "no-store")
+		return c.Send(buf.Bytes())
 	})
 
-	// Shutdown on SIGTERM/SIGINT
-	go func() {
-		select {
-		case <-shutdownSigs:
-			slog.Info("shutdown signal received")
-			cancel()
-			_ = app.Shutdown()
-		case <-ctx.Done():
+	app.Get("/api/history/series", rl, func(c fiber.Ctx) error {
+		series, err := histStore.ListSeries()
+		if err != nil {
+			slog.Error("history list series failed", "error", err)
+			return fiber.ErrInternalServerError
 		}
-	}()
+		if series == nil {
+			series = []history.SeriesInfo{}
+		}
+		return c.JSON(series)
+	})
 
-	slog.Info("zfs-dash started", "url", fmt.Sprintf("http://localhost%s", cfg.Addr))
-	return app.Listen(cfg.Addr)
+	app.Get("/api/history/query", rl, func(c fiber.Ctx) error {
+		key := c.Query("key")
+		if key == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "key required"})
+		}
+		fromUnix, toUnix, bucketSecs, err := parseHistoryQueryParams(c)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		}
+
+		now := time.Now()
+		to := now
+		if toUnix > 0 {
+			to = time.Unix(toUnix, 0)
+		}
+		from := to.Add(-24 * time.Hour) // default: 24h before to
+		if fromUnix > 0 {
+			from = time.Unix(fromUnix, 0)
+		}
+
+		points, err := histStore.Query(key, from, to, bucketSecs)
+		if err != nil {
+			slog.Error("history query failed", "error", err, "key", key)
+			return fiber.ErrInternalServerError
+		}
+		if points == nil {
+			points = []history.Point{}
+		}
+		return c.JSON(points)
+	})
+}
+
+// parseHistoryQueryParams parses and validates the from/to/bucket query params
+// shared by the /api/history/query endpoint.
+func parseHistoryQueryParams(c fiber.Ctx) (fromUnix, toUnix, bucketSecs int64, err error) {
+	if s := c.Query("from"); s != "" {
+		if fromUnix, err = strconv.ParseInt(s, 10, 64); err != nil {
+			return 0, 0, 0, fmt.Errorf("invalid from")
+		}
+	}
+	if s := c.Query("to"); s != "" {
+		if toUnix, err = strconv.ParseInt(s, 10, 64); err != nil {
+			return 0, 0, 0, fmt.Errorf("invalid to")
+		}
+	}
+	if s := c.Query("bucket"); s != "" {
+		if bucketSecs, err = strconv.ParseInt(s, 10, 64); err != nil {
+			return 0, 0, 0, fmt.Errorf("invalid bucket")
+		}
+	}
+	if fromUnix < 0 || toUnix < 0 {
+		return 0, 0, 0, fmt.Errorf("timestamps must be non-negative")
+	}
+	return fromUnix, toUnix, bucketSecs, nil
+}
+
+func shutdownOnSignal(shutdownSigs <-chan os.Signal, ctx context.Context, cancel context.CancelFunc, app *fiber.App) {
+	select {
+	case <-shutdownSigs:
+		slog.Info("shutdown signal received")
+		cancel()
+		_ = app.Shutdown()
+	case <-ctx.Done():
+	}
 }
 
 func setupLogger(cfg *config.Config) {
@@ -399,7 +429,7 @@ func buildTemplateData(nodes []model.NodeData, cfg *config.Config) templateData 
 
 	d := templateData{
 		Nodes:       nodes,
-		NodesJSON:   template.JS(nodesJSON), //nolint:gosec // json.Marshal output is safe for inline JS
+		NodesJSON:   template.JS(nodesJSON), //nolint:gosec // skipcq: GSC-G203 -- json.Marshal output is safe for inline JS
 		RefreshSecs: int(cfg.Refresh.Seconds()),
 		FetchedAt:   time.Now().Format("15:04:05"),
 		TotalNodes:  len(nodes),
@@ -452,52 +482,60 @@ func serveHealthCheck(c fiber.Ctx, f *fetcher.Fetcher, label, poolName string, c
 	}
 
 	if poolName == "" {
-		badPools := []string{}
-		overThreshold := []string{}
-		for _, pool := range node.Pools {
-			if pool.Health != model.HealthOnline {
-				badPools = append(badPools, pool.Name)
-			} else if cfg.MaxUsagePercent > 0 && pool.UsedPercent > cfg.MaxUsagePercent {
-				overThreshold = append(overThreshold, pool.Name)
-			}
-		}
+		return nodeHealthResponse(c, node, label, cfg)
+	}
+	return poolHealthResponse(c, node, label, poolName, cfg)
+}
 
-		status := fiber.StatusOK
-		state := "up"
-		reason := ""
-		if len(node.Pools) == 0 {
-			status = fiber.StatusServiceUnavailable
-			state = "no_pools"
-			slog.Debug("node has 0 pools", "label", label)
-		} else if len(badPools) > 0 {
-			status = fiber.StatusServiceUnavailable
-			state = "degraded"
-			reason = "unhealthy_pools"
-			slog.Debug("node has unhealthy pools", "label", label, "pools", badPools)
-		} else if len(overThreshold) > 0 {
-			status = fiber.StatusServiceUnavailable
-			state = "degraded"
-			reason = "pool_over_threshold"
-			slog.Debug("node has pools over threshold", "label", label, "pools", overThreshold, "threshold", cfg.MaxUsagePercent)
+func nodeHealthResponse(c fiber.Ctx, node *model.NodeData, label string, cfg *config.Config) error {
+	var badPools []string
+	var overThreshold []string
+	for _, pool := range node.Pools {
+		if pool.Health != model.HealthOnline {
+			badPools = append(badPools, pool.Name)
+		} else if cfg.MaxUsagePercent > 0 && pool.UsedPercent > cfg.MaxUsagePercent {
+			overThreshold = append(overThreshold, pool.Name)
 		}
-
-		res := fiber.Map{
-			"status":          state,
-			"label":           node.Label,
-			"location":        node.Location,
-			"pool_count":      len(node.Pools),
-			"unhealthy_pools": badPools,
-		}
-		if reason != "" {
-			res["reason"] = reason
-		}
-		if len(overThreshold) > 0 {
-			res["over_threshold_pools"] = overThreshold
-		}
-
-		return c.Status(status).JSON(res)
 	}
 
+	status := fiber.StatusOK
+	state := "up"
+	reason := ""
+	switch {
+	case len(node.Pools) == 0:
+		status = fiber.StatusServiceUnavailable
+		state = "no_pools"
+		slog.Debug("node has 0 pools", "label", label)
+	case len(badPools) > 0:
+		status = fiber.StatusServiceUnavailable
+		state = "degraded"
+		reason = "unhealthy_pools"
+		slog.Debug("node has unhealthy pools", "label", label, "pools", badPools)
+	case len(overThreshold) > 0:
+		status = fiber.StatusServiceUnavailable
+		state = "degraded"
+		reason = "pool_over_threshold"
+		slog.Debug("node has pools over threshold", "label", label, "pools", overThreshold, "threshold", cfg.MaxUsagePercent)
+	}
+
+	res := fiber.Map{
+		"status":          state,
+		"label":           node.Label,
+		"location":        node.Location,
+		"pool_count":      len(node.Pools),
+		"unhealthy_pools": badPools,
+	}
+	if reason != "" {
+		res["reason"] = reason
+	}
+	if len(overThreshold) > 0 {
+		res["over_threshold_pools"] = overThreshold
+	}
+
+	return c.Status(status).JSON(res)
+}
+
+func poolHealthResponse(c fiber.Ctx, node *model.NodeData, label, poolName string, cfg *config.Config) error {
 	pool, err := findPoolByName(node.Pools, poolName)
 	if err != nil {
 		slog.Debug("pool not found", "label", label, "pool", poolName)
@@ -573,150 +611,175 @@ func setCacheHeaders(c fiber.Ctx, f *fetcher.Fetcher, isCached bool) {
 
 func funcMap() template.FuncMap {
 	return template.FuncMap{
-		"humanBytes": model.HumanBytes,
-		"healthClass": func(h model.PoolHealth) string {
-			switch h {
-			case model.HealthOnline:
-				return "health-online"
-			case model.HealthDegraded:
-				return "health-degraded"
-			default:
-				return "health-faulted"
-			}
-		},
-		"fmtNodeTime": func(t time.Time) string {
-			return t.Format("15:04:05")
-		},
-		"toJSON": func(v any) string {
-			b, _ := json.Marshal(v)
-			return string(b)
-		},
-		"fmtSpeed": func(bps float64) string {
-			switch {
-			case bps >= 1e9:
-				return fmt.Sprintf("%.0f Gb/s", bps/1e9)
-			case bps >= 1e6:
-				return fmt.Sprintf("%.0f Mb/s", bps/1e6)
-			default:
-				return fmt.Sprintf("%.0f b/s", bps)
-			}
-		},
-		"exitStatusDesc": func(code float64) string {
-			n := int(code)
-			if n == 0 {
-				return ""
-			}
-			var parts []string
-			if n&(1<<1) != 0 {
-				parts = append(parts, "device failure")
-			}
-			if n&(1<<2) != 0 {
-				parts = append(parts, "disk failing")
-			}
-			if n&(1<<3) != 0 {
-				parts = append(parts, "prefail attributes")
-			}
-			if n&(1<<4) != 0 {
-				parts = append(parts, "prev failed attributes")
-			}
-			if n&(1<<5) != 0 {
-				parts = append(parts, "error log has errors")
-			}
-			if n&(1<<6) != 0 {
-				parts = append(parts, "self-test errors")
-			}
-			if len(parts) == 0 {
-				return fmt.Sprintf("code %d", n)
-			}
-			return strings.Join(parts, ", ")
-		},
-		"diskHasIssues": func(d model.DiskInfo) bool {
-			return d.PendingSectors > 0 || d.OfflineUncorrectable > 0 || d.ReportedUncorrect > 0 ||
-				d.ProgramFailCount > 0 || d.EraseFailCount > 0 ||
-				(d.HasExitStatus && d.ExitStatus > 0)
-		},
-		"tempBarPct": func(temp, maxTemp float64) string {
-			if maxTemp <= 0 {
-				maxTemp = 70
-			}
-			pct := (temp / maxTemp) * 100
-			if pct > 100 {
-				pct = 100
-			} else if pct < 0 {
-				pct = 0
-			}
-			return fmt.Sprintf("%.1f", pct)
-		},
-		"fmtHours": func(h float64) string {
-			total := int(h)
-			days := total / 24
-			hrs := total % 24
-			if days >= 365 {
-				y := days / 365
-				d := days % 365
-				return fmt.Sprintf("%dy %dd", y, d)
-			}
-			if days > 0 {
-				return fmt.Sprintf("%dd %dh", days, hrs)
-			}
-			return fmt.Sprintf("%dh", total)
-		},
-		"maskSerial": func(s string) string {
-			const maskLen = 5
-			if len(s) <= maskLen {
-				return strings.Repeat("x", len(s))
-			}
-			return s[:len(s)-maskLen] + strings.Repeat("x", maskLen)
-		},
-		"diskTypeLabel": func(iface string, rpm int) string {
-			switch {
-			case iface == "nvme":
-				return "NVMe"
-			case rpm > 0:
-				return "HDD"
-			default:
-				return "SSD"
-			}
-		},
-		"diskTypeClass": func(iface string, rpm int) string {
-			switch {
-			case iface == "nvme":
-				return "nvme"
-			case rpm > 0:
-				return "hdd"
-			default:
-				return "ssd"
-			}
-		},
-		"tempClass": func(c float64) string {
-			switch {
-			case c > 55:
-				return "hot"
-			case c > 45:
-				return "warm"
-			default:
-				return "cool"
-			}
-		},
-		"gt0":    func(f float64) bool { return f > 0 },
-		"gte":    func(a, b float64) bool { return a >= b },
-		"mul100": func(f float64) float64 { return f * 100 },
-		"mul512": func(f float64) float64 { return f * 512 },
-		"join":   strings.Join,
-		"safeJS": func(s string) template.JS { return template.JS(s) },
-		"dict": func(values ...any) (map[string]any, error) {
-			if len(values)%2 != 0 {
-				return nil, fmt.Errorf("invalid dict call: expected even number of arguments")
-			}
-			dict := make(map[string]any, len(values)/2)
-			for i := 0; i < len(values); i += 2 {
-				key, ok := values[i].(string)
-				if !ok {
-					return nil, fmt.Errorf("dict keys must be strings")
-				}
-				dict[key] = values[i+1]
-			}
-			return dict, nil
-		},
+		"humanBytes":     model.HumanBytes,
+		"healthClass":    healthClass,
+		"fmtNodeTime":    fmtNodeTime,
+		"toJSON":         toJSON,
+		"fmtSpeed":       fmtSpeed,
+		"exitStatusDesc": exitStatusDesc,
+		"diskHasIssues":  diskHasIssues,
+		"tempBarPct":     tempBarPct,
+		"fmtHours":       fmtHours,
+		"maskSerial":     maskSerial,
+		"diskTypeLabel":  diskTypeLabel,
+		"diskTypeClass":  diskTypeClass,
+		"tempClass":      tempClass,
+		"gt0":            func(f float64) bool { return f > 0 },
+		"gte":            func(a, b float64) bool { return a >= b },
+		"mul100":         func(f float64) float64 { return f * 100 },
+		"mul512":         func(f float64) float64 { return f * 512 },
+		"join":           strings.Join,
+		"dict":           dict,
 	}
+}
+
+func healthClass(h model.PoolHealth) string {
+	switch h {
+	case model.HealthOnline:
+		return "health-online"
+	case model.HealthDegraded:
+		return "health-degraded"
+	default:
+		return "health-faulted"
+	}
+}
+
+func fmtNodeTime(t time.Time) string {
+	return t.Format("15:04:05")
+}
+
+func toJSON(v any) string {
+	b, _ := json.Marshal(v)
+	return string(b)
+}
+
+func fmtSpeed(bps float64) string {
+	switch {
+	case bps >= 1e9:
+		return fmt.Sprintf("%.0f Gb/s", bps/1e9)
+	case bps >= 1e6:
+		return fmt.Sprintf("%.0f Mb/s", bps/1e6)
+	default:
+		return fmt.Sprintf("%.0f b/s", bps)
+	}
+}
+
+func exitStatusDesc(code float64) string {
+	n := int(code)
+	if n == 0 {
+		return ""
+	}
+	var parts []string
+	if n&(1<<1) != 0 {
+		parts = append(parts, "device failure")
+	}
+	if n&(1<<2) != 0 {
+		parts = append(parts, "disk failing")
+	}
+	if n&(1<<3) != 0 {
+		parts = append(parts, "prefail attributes")
+	}
+	if n&(1<<4) != 0 {
+		parts = append(parts, "prev failed attributes")
+	}
+	if n&(1<<5) != 0 {
+		parts = append(parts, "error log has errors")
+	}
+	if n&(1<<6) != 0 {
+		parts = append(parts, "self-test errors")
+	}
+	if len(parts) == 0 {
+		return fmt.Sprintf("code %d", n)
+	}
+	return strings.Join(parts, ", ")
+}
+
+func diskHasIssues(d model.DiskInfo) bool {
+	return d.PendingSectors > 0 || d.OfflineUncorrectable > 0 || d.ReportedUncorrect > 0 ||
+		d.ProgramFailCount > 0 || d.EraseFailCount > 0 ||
+		(d.HasExitStatus && d.ExitStatus > 0)
+}
+
+func tempBarPct(temp, maxTemp float64) string {
+	if maxTemp <= 0 {
+		maxTemp = 70
+	}
+	pct := (temp / maxTemp) * 100
+	if pct > 100 {
+		pct = 100
+	} else if pct < 0 {
+		pct = 0
+	}
+	return fmt.Sprintf("%.1f", pct)
+}
+
+func fmtHours(h float64) string {
+	total := int(h)
+	days := total / 24
+	hrs := total % 24
+	if days >= 365 {
+		y := days / 365
+		d := days % 365
+		return fmt.Sprintf("%dy %dd", y, d)
+	}
+	if days > 0 {
+		return fmt.Sprintf("%dd %dh", days, hrs)
+	}
+	return fmt.Sprintf("%dh", total)
+}
+
+func maskSerial(s string) string {
+	const maskLen = 5
+	if len(s) <= maskLen {
+		return strings.Repeat("x", len(s))
+	}
+	return s[:len(s)-maskLen] + strings.Repeat("x", maskLen)
+}
+
+func diskTypeLabel(iface string, rpm int) string {
+	switch {
+	case iface == "nvme":
+		return "NVMe"
+	case rpm > 0:
+		return "HDD"
+	default:
+		return "SSD"
+	}
+}
+
+func diskTypeClass(iface string, rpm int) string {
+	switch {
+	case iface == "nvme":
+		return "nvme"
+	case rpm > 0:
+		return "hdd"
+	default:
+		return "ssd"
+	}
+}
+
+func tempClass(c float64) string {
+	switch {
+	case c > 55:
+		return "hot"
+	case c > 45:
+		return "warm"
+	default:
+		return "cool"
+	}
+}
+
+func dict(values ...any) (map[string]any, error) {
+	if len(values)%2 != 0 {
+		return nil, fmt.Errorf("invalid dict call: expected even number of arguments")
+	}
+	d := make(map[string]any, len(values)/2)
+	for i := 0; i < len(values); i += 2 {
+		key, ok := values[i].(string)
+		if !ok {
+			return nil, fmt.Errorf("dict keys must be strings")
+		}
+		d[key] = values[i+1]
+	}
+	return d, nil
 }

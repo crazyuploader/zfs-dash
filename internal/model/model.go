@@ -65,13 +65,13 @@ type DiskInfo struct {
 	ModelName            string  `json:"model_name,omitempty"`
 	SerialNumber         string  `json:"serial_number,omitempty"`
 	FirmwareVersion      string  `json:"firmware_version,omitempty"`
-	Interface            string  `json:"interface,omitempty"`   // "sat", "nvme", "scsi"
-	FormFactor           string  `json:"form_factor,omitempty"` // "3.5 inches", ""
-	Temperature          float64 `json:"temperature"`           // °C current, 0 if unknown
+	Interface            string  `json:"interface,omitempty"`       // "sat", "nvme", "scsi"
+	FormFactor           string  `json:"form_factor,omitempty"`     // "3.5 inches", ""
+	Temperature          float64 `json:"temperature"`               // °C current, 0 if unknown
 	HasTemperature       bool    `json:"has_temperature,omitempty"` // true when current temp metric was present (even if 0)
-	TempMin              float64 `json:"temp_min,omitempty"`    // lifetime min °C
-	TempMax              float64 `json:"temp_max,omitempty"`    // lifetime max °C
-	TempTrip             float64 `json:"temp_trip,omitempty"`   // hardware trip/critical °C
+	TempMin              float64 `json:"temp_min,omitempty"`        // lifetime min °C
+	TempMax              float64 `json:"temp_max,omitempty"`        // lifetime max °C
+	TempTrip             float64 `json:"temp_trip,omitempty"`       // hardware trip/critical °C
 	SmartPassed          bool    `json:"smart_passed"`
 	PowerOnHours         float64 `json:"power_on_hours"`
 	PowerCycles          float64 `json:"power_cycles,omitempty"`
@@ -213,124 +213,7 @@ func ExtractDisks(samples []parser.Sample) []DiskInfo {
 		if device == "" {
 			continue
 		}
-		switch s.Name {
-		case "smartctl_device":
-			d := ensure(device)
-			if d.ModelName == "" {
-				d.ModelName = s.Labels["model_name"]
-			}
-			if d.SerialNumber == "" {
-				d.SerialNumber = s.Labels["serial_number"]
-			}
-			if d.FirmwareVersion == "" {
-				d.FirmwareVersion = s.Labels["firmware_version"]
-			}
-			if d.Interface == "" {
-				d.Interface = s.Labels["interface"]
-			}
-			if d.FormFactor == "" {
-				d.FormFactor = s.Labels["form_factor"]
-			}
-		case "smartctl_device_temperature":
-			d := ensure(device)
-			switch s.Labels["temperature_type"] {
-			case "current":
-				d.Temperature = s.Value
-				d.HasTemperature = true
-			case "drive_trip":
-				d.TempTrip = s.Value
-			case "lifetime_min":
-				if d.TempMin == 0 || s.Value < d.TempMin {
-					d.TempMin = s.Value
-				}
-			case "lifetime_max":
-				if d.TempMax == 0 || s.Value > d.TempMax {
-					d.TempMax = s.Value
-				}
-			}
-		case "smartctl_device_smart_status":
-			ensure(device).SmartPassed = s.Value == 1
-		case "smartctl_device_power_on_seconds":
-			ensure(device).PowerOnHours = s.Value / 3600
-		case "smartctl_device_power_cycle_count":
-			ensure(device).PowerCycles = s.Value
-		case "smartctl_device_capacity_bytes":
-			ensure(device).CapacityBytes = s.Value
-		case "smartctl_device_rotation_rate":
-			ensure(device).RotationRate = int(math.Round(s.Value))
-		case "smartctl_device_percentage_used":
-			d := ensure(device)
-			d.PercentageUsed = s.Value
-			d.HasPercentUsed = true
-		case "smartctl_device_available_spare":
-			ensure(device).AvailableSpare = s.Value
-		case "smartctl_device_available_spare_threshold":
-			ensure(device).SpareThreshold = s.Value
-		case "smartctl_device_media_errors":
-			d := ensure(device)
-			d.MediaErrors = s.Value
-			d.HasMediaErrors = true
-		case "smartctl_device_critical_warning":
-			ensure(device).CriticalWarning = s.Value
-		case "smartctl_device_bytes_read":
-			ensure(device).BytesRead = s.Value
-		case "smartctl_device_bytes_written":
-			ensure(device).BytesWritten = s.Value
-		case "smartctl_device_error_log_count":
-			if s.Labels["error_log_type"] == "summary" {
-				ensure(device).ErrorLogCount = s.Value
-			}
-		case "smartctl_device_num_err_log_entries":
-			// NVMe error log entries (separate metric from HDD error_log_count)
-			d := ensure(device)
-			if d.ErrorLogCount == 0 {
-				d.ErrorLogCount = s.Value
-			}
-		case "smartctl_device_interface_speed":
-			if s.Labels["speed_type"] == "current" {
-				ensure(device).InterfaceSpeed = s.Value
-			}
-		case "smartctl_device_smartctl_exit_status":
-			d := ensure(device)
-			d.ExitStatus = s.Value
-			d.HasExitStatus = true
-		case "smartctl_device_attribute":
-			if s.Labels["attribute_value_type"] != "raw" {
-				continue
-			}
-			d := ensure(device)
-			switch s.Labels["attribute_name"] {
-			case "Reallocated_Sector_Ct":
-				d.ReallocatedSectors = s.Value
-			case "Current_Pending_Sector":
-				d.PendingSectors = s.Value
-			case "Offline_Uncorrectable":
-				d.OfflineUncorrectable = s.Value
-			case "Reported_Uncorrect":
-				d.ReportedUncorrect = s.Value
-			case "UDMA_CRC_Error_Count":
-				d.UDMACRCErrors = s.Value
-			case "Load_Cycle_Count":
-				d.LoadCycleCount = s.Value
-			// SATA SSD attributes
-			case "Wear_Leveling_Count":
-				d.WearLevelingCount = s.Value
-				d.HasWearLeveling = true
-			case "Used_Rsvd_Blk_Cnt_Chip", "Used_Rsvd_Blk_Cnt_Tot":
-				d.UsedReservedBlocks = s.Value
-			case "Program_Fail_Cnt_Total", "Program_Fail_Count_Chip":
-				d.ProgramFailCount = s.Value
-			case "Erase_Fail_Count_Total", "Erase_Fail_Count_Chip", "Erase_Fail_Count":
-				d.EraseFailCount = s.Value
-			case "Available_Reservd_Space", "Available_Reserved_Space":
-				d.AvailableReservedPct = s.Value
-				d.HasAvailReserved = true
-			case "Total_LBAs_Written":
-				d.TotalLBAsWritten = s.Value
-			case "Total_LBAs_Read":
-				d.TotalLBAsRead = s.Value
-			}
-		}
+		applyDiskSample(ensure(device), s)
 	}
 
 	if len(disks) == 0 {
@@ -345,6 +228,142 @@ func ExtractDisks(samples []parser.Sample) []DiskInfo {
 		return strings.Compare(a.Device, b.Device)
 	})
 	return result
+}
+
+// applyDiskSample updates d from one smartctl_exporter sample.
+func applyDiskSample(d *DiskInfo, s parser.Sample) {
+	switch s.Name {
+	case "smartctl_device":
+		applyDiskIdentity(d, s)
+	case "smartctl_device_temperature":
+		applyDiskTemperature(d, s)
+	case "smartctl_device_smart_status":
+		d.SmartPassed = s.Value == 1
+	case "smartctl_device_power_on_seconds":
+		d.PowerOnHours = s.Value / 3600
+	case "smartctl_device_power_cycle_count":
+		d.PowerCycles = s.Value
+	case "smartctl_device_capacity_bytes":
+		d.CapacityBytes = s.Value
+	case "smartctl_device_rotation_rate":
+		d.RotationRate = int(math.Round(s.Value))
+	case "smartctl_device_available_spare":
+		d.AvailableSpare = s.Value
+	case "smartctl_device_available_spare_threshold":
+		d.SpareThreshold = s.Value
+	case "smartctl_device_critical_warning":
+		d.CriticalWarning = s.Value
+	case "smartctl_device_bytes_read":
+		d.BytesRead = s.Value
+	case "smartctl_device_bytes_written":
+		d.BytesWritten = s.Value
+	case "smartctl_device_smartctl_exit_status":
+		d.ExitStatus = s.Value
+		d.HasExitStatus = true
+	default:
+		applyDiskCounterSample(d, s)
+	}
+}
+
+// applyDiskCounterSample handles the remaining metrics whose handling
+// depends on sample labels (has-flags, conditional label matches).
+func applyDiskCounterSample(d *DiskInfo, s parser.Sample) {
+	switch s.Name {
+	case "smartctl_device_percentage_used":
+		d.PercentageUsed = s.Value
+		d.HasPercentUsed = true
+	case "smartctl_device_media_errors":
+		d.MediaErrors = s.Value
+		d.HasMediaErrors = true
+	case "smartctl_device_error_log_count":
+		if s.Labels["error_log_type"] == "summary" {
+			d.ErrorLogCount = s.Value
+		}
+	case "smartctl_device_num_err_log_entries":
+		// NVMe error log entries (separate metric from HDD error_log_count)
+		if d.ErrorLogCount == 0 {
+			d.ErrorLogCount = s.Value
+		}
+	case "smartctl_device_interface_speed":
+		if s.Labels["speed_type"] == "current" {
+			d.InterfaceSpeed = s.Value
+		}
+	case "smartctl_device_attribute":
+		applyDiskAttribute(d, s)
+	}
+}
+
+func applyDiskIdentity(d *DiskInfo, s parser.Sample) {
+	if d.ModelName == "" {
+		d.ModelName = s.Labels["model_name"]
+	}
+	if d.SerialNumber == "" {
+		d.SerialNumber = s.Labels["serial_number"]
+	}
+	if d.FirmwareVersion == "" {
+		d.FirmwareVersion = s.Labels["firmware_version"]
+	}
+	if d.Interface == "" {
+		d.Interface = s.Labels["interface"]
+	}
+	if d.FormFactor == "" {
+		d.FormFactor = s.Labels["form_factor"]
+	}
+}
+
+func applyDiskTemperature(d *DiskInfo, s parser.Sample) {
+	switch s.Labels["temperature_type"] {
+	case "current":
+		d.Temperature = s.Value
+		d.HasTemperature = true
+	case "drive_trip":
+		d.TempTrip = s.Value
+	case "lifetime_min":
+		if d.TempMin == 0 || s.Value < d.TempMin {
+			d.TempMin = s.Value
+		}
+	case "lifetime_max":
+		if d.TempMax == 0 || s.Value > d.TempMax {
+			d.TempMax = s.Value
+		}
+	}
+}
+
+func applyDiskAttribute(d *DiskInfo, s parser.Sample) {
+	if s.Labels["attribute_value_type"] != "raw" {
+		return
+	}
+	switch s.Labels["attribute_name"] {
+	case "Reallocated_Sector_Ct":
+		d.ReallocatedSectors = s.Value
+	case "Current_Pending_Sector":
+		d.PendingSectors = s.Value
+	case "Offline_Uncorrectable":
+		d.OfflineUncorrectable = s.Value
+	case "Reported_Uncorrect":
+		d.ReportedUncorrect = s.Value
+	case "UDMA_CRC_Error_Count":
+		d.UDMACRCErrors = s.Value
+	case "Load_Cycle_Count":
+		d.LoadCycleCount = s.Value
+	// SATA SSD attributes
+	case "Wear_Leveling_Count":
+		d.WearLevelingCount = s.Value
+		d.HasWearLeveling = true
+	case "Used_Rsvd_Blk_Cnt_Chip", "Used_Rsvd_Blk_Cnt_Tot":
+		d.UsedReservedBlocks = s.Value
+	case "Program_Fail_Cnt_Total", "Program_Fail_Count_Chip":
+		d.ProgramFailCount = s.Value
+	case "Erase_Fail_Count_Total", "Erase_Fail_Count_Chip", "Erase_Fail_Count":
+		d.EraseFailCount = s.Value
+	case "Available_Reservd_Space", "Available_Reserved_Space":
+		d.AvailableReservedPct = s.Value
+		d.HasAvailReserved = true
+	case "Total_LBAs_Written":
+		d.TotalLBAsWritten = s.Value
+	case "Total_LBAs_Read":
+		d.TotalLBAsRead = s.Value
+	}
 }
 
 // ExtractPools builds Pool structs from a flat Prometheus sample slice.
@@ -377,86 +396,22 @@ func ExtractPools(samples []parser.Sample) []Pool {
 		if pool == "" {
 			continue
 		}
-		p := ensure(pool)
 		if datasetName := s.Labels["name"]; datasetName != "" {
-			d := ensureDataset(pool, datasetName, s.Labels["type"])
-			switch s.Name {
-			case "zfs_dataset_available_bytes":
-				d.Available = s.Value
-			case "zfs_dataset_logical_used_bytes":
-				d.LogicalUsed = s.Value
-			case "zfs_dataset_quota_bytes":
-				d.Quota = s.Value
-			case "zfs_dataset_referenced_bytes":
-				d.Referenced = s.Value
-			case "zfs_dataset_used_by_dataset_bytes":
-				d.UsedByDataset = s.Value
-			case "zfs_dataset_used_bytes":
-				d.Used = s.Value
-			case "zfs_dataset_volume_size_bytes":
-				d.VolumeSize = s.Value
-			case "zfs_dataset_written_bytes":
-				d.Written = s.Value
-			}
+			applyDatasetSample(ensureDataset(pool, datasetName, s.Labels["type"]), s)
 		}
-
-		switch s.Name {
-		case "zfs_pool_health":
-			p.Health = healthFromValue(s.Value)
-		case "zfs_pool_size_bytes":
-			p.Size = s.Value
-		case "zfs_pool_allocated_bytes":
-			p.Allocated = s.Value
-		case "zfs_pool_free_bytes":
-			p.Free = s.Value
-		case "zfs_pool_freeing_bytes":
-			p.Freeing = s.Value
-		case "zfs_pool_leaked_bytes":
-			p.LeakedBytes = s.Value
-		case "zfs_pool_deduplication_ratio":
-			p.DedupRatio = s.Value
-		case "zfs_pool_fragmentation_ratio":
-			p.FragmentationRatio = s.Value
-		case "zfs_pool_readonly":
-			p.ReadOnly = s.Value != 0
-		}
+		applyPoolSample(ensure(pool), s)
 	}
 
 	result := make([]Pool, 0, len(pools))
 	for _, d := range datasets {
-		if d.Used > 0 && d.Available > 0 {
-			total := d.Used + d.Available
-			d.UsedPercent = math.Round((d.Used/total)*10000) / 100
-		}
-		if d.Quota > 0 {
-			d.QuotaUsedPercent = math.Round((d.Used/d.Quota)*10000) / 100
-		}
-		if d.VolumeSize > 0 {
-			d.VolumeUsedPercent = math.Round((d.Used/d.VolumeSize)*10000) / 100
-		}
+		finalizeDataset(d)
 		if p, ok := pools[d.Pool]; ok {
 			p.Datasets = append(p.Datasets, *d)
 		}
 	}
 
 	for _, p := range pools {
-		if p.Size > 0 {
-			if p.Allocated > 0 && p.Free == 0 {
-				p.Free = p.Size - p.Allocated
-			} else if p.Free > 0 && p.Allocated == 0 {
-				p.Allocated = p.Size - p.Free
-			}
-			p.UsedPercent = math.Round((p.Allocated/p.Size)*10000) / 100
-		}
-		slices.SortFunc(p.Datasets, func(a, b Dataset) int {
-			if a.Used != b.Used {
-				if a.Used > b.Used {
-					return -1
-				}
-				return 1
-			}
-			return strings.Compare(a.Name, b.Name)
-		})
+		finalizePool(p)
 		result = append(result, *p)
 	}
 
@@ -465,6 +420,85 @@ func ExtractPools(samples []parser.Sample) []Pool {
 	})
 
 	return result
+}
+
+func applyDatasetSample(d *Dataset, s parser.Sample) {
+	switch s.Name {
+	case "zfs_dataset_available_bytes":
+		d.Available = s.Value
+	case "zfs_dataset_logical_used_bytes":
+		d.LogicalUsed = s.Value
+	case "zfs_dataset_quota_bytes":
+		d.Quota = s.Value
+	case "zfs_dataset_referenced_bytes":
+		d.Referenced = s.Value
+	case "zfs_dataset_used_by_dataset_bytes":
+		d.UsedByDataset = s.Value
+	case "zfs_dataset_used_bytes":
+		d.Used = s.Value
+	case "zfs_dataset_volume_size_bytes":
+		d.VolumeSize = s.Value
+	case "zfs_dataset_written_bytes":
+		d.Written = s.Value
+	}
+}
+
+func applyPoolSample(p *Pool, s parser.Sample) {
+	switch s.Name {
+	case "zfs_pool_health":
+		p.Health = healthFromValue(s.Value)
+	case "zfs_pool_size_bytes":
+		p.Size = s.Value
+	case "zfs_pool_allocated_bytes":
+		p.Allocated = s.Value
+	case "zfs_pool_free_bytes":
+		p.Free = s.Value
+	case "zfs_pool_freeing_bytes":
+		p.Freeing = s.Value
+	case "zfs_pool_leaked_bytes":
+		p.LeakedBytes = s.Value
+	case "zfs_pool_deduplication_ratio":
+		p.DedupRatio = s.Value
+	case "zfs_pool_fragmentation_ratio":
+		p.FragmentationRatio = s.Value
+	case "zfs_pool_readonly":
+		p.ReadOnly = s.Value != 0
+	}
+}
+
+// finalizeDataset computes derived percentage fields for one dataset.
+func finalizeDataset(d *Dataset) {
+	if d.Used > 0 && d.Available > 0 {
+		total := d.Used + d.Available
+		d.UsedPercent = math.Round((d.Used/total)*10000) / 100
+	}
+	if d.Quota > 0 {
+		d.QuotaUsedPercent = math.Round((d.Used/d.Quota)*10000) / 100
+	}
+	if d.VolumeSize > 0 {
+		d.VolumeUsedPercent = math.Round((d.Used/d.VolumeSize)*10000) / 100
+	}
+}
+
+// finalizePool reconciles size/allocated/free and sorts datasets for one pool.
+func finalizePool(p *Pool) {
+	if p.Size > 0 {
+		if p.Allocated > 0 && p.Free == 0 {
+			p.Free = p.Size - p.Allocated
+		} else if p.Free > 0 && p.Allocated == 0 {
+			p.Allocated = p.Size - p.Free
+		}
+		p.UsedPercent = math.Round((p.Allocated/p.Size)*10000) / 100
+	}
+	slices.SortFunc(p.Datasets, func(a, b Dataset) int {
+		if a.Used != b.Used {
+			if a.Used > b.Used {
+				return -1
+			}
+			return 1
+		}
+		return strings.Compare(a.Name, b.Name)
+	})
 }
 
 // HumanBytes returns a human-readable byte string (e.g. "3.72 TB").
