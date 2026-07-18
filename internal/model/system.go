@@ -59,6 +59,7 @@ type SystemInfo struct {
 	Load1      float64 `json:"load1"`
 	Load5      float64 `json:"load5"`
 	Load15     float64 `json:"load15"`
+	HasLoad    bool    `json:"has_load,omitempty"` // true when node_load1 was present
 	UptimeSecs float64 `json:"uptime_secs"`
 
 	MemTotal     float64 `json:"mem_total"`
@@ -143,6 +144,7 @@ func ExtractSystem(samples []parser.Sample) *SystemInfo {
 			}
 		case "node_load1":
 			sys.Load1 = s.Value
+			sys.HasLoad = true
 		case "node_load5":
 			sys.Load5 = s.Value
 		case "node_load15":

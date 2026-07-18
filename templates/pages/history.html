@@ -167,7 +167,8 @@ canvas#chart { display:block; width:100%; }
 {{end}}
 
 {{define "topbar-extra"}}
-<button class="sidebar-toggle" id="sidebar-toggle-btn" aria-label="Toggle sidebar">
+<button class="sidebar-toggle" id="sidebar-toggle-btn" aria-label="Toggle sidebar"
+        aria-expanded="false" aria-controls="sidebar">
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
     <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
   </svg>
@@ -228,14 +229,16 @@ canvas#chart { display:block; width:100%; }
   /* ── Mobile sidebar toggle ── */
   const sidebarEl = document.getElementById('sidebar');
   const overlayEl = document.getElementById('sidebar-overlay');
-  document.getElementById('sidebar-toggle-btn').addEventListener('click', () => {
-    sidebarEl.classList.toggle('open');
-    overlayEl.classList.toggle('open');
+  const sidebarBtn = document.getElementById('sidebar-toggle-btn');
+  function setSidebar(open) {
+    sidebarEl.classList.toggle('open', open);
+    overlayEl.classList.toggle('open', open);
+    sidebarBtn.setAttribute('aria-expanded', String(open));
+  }
+  sidebarBtn.addEventListener('click', () => {
+    setSidebar(!sidebarEl.classList.contains('open'));
   });
-  overlayEl.addEventListener('click', () => {
-    sidebarEl.classList.remove('open');
-    overlayEl.classList.remove('open');
-  });
+  overlayEl.addEventListener('click', () => setSidebar(false));
 
   /* Re-render chart when the shared theme toggle fires */
   document.addEventListener('zfsdash:theme', () => {

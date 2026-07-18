@@ -1205,17 +1205,18 @@
 
   /* ── Auto-refresh progress bar ──
      Reload itself is driven by the shared SSE handler (see shared_js);
-     this bar just visualizes the expected refresh interval. */
+     this bar just visualizes the expected refresh interval. One update
+     per second is plenty; skipped under prefers-reduced-motion. */
   const REFRESH_MS = {{.RefreshSecs}} * 1000;
   const rbar = document.getElementById('rbar');
-  const startAt = Date.now();
-
-  function tickBar() {
-    const pct = Math.min((Date.now() - startAt) / REFRESH_MS * 100, 100);
-    if (rbar) rbar.style.width = pct + '%';
-    if (pct < 100) requestAnimationFrame(tickBar);
+  if (rbar && !prefersReducedMotion) {
+    const startAt = Date.now();
+    const barTimer = setInterval(function () {
+      const pct = Math.min((Date.now() - startAt) / REFRESH_MS * 100, 100);
+      rbar.style.width = pct + '%';
+      if (pct >= 100) clearInterval(barTimer);
+    }, 1000);
   }
-  requestAnimationFrame(tickBar);
 
   /* ── Restore UI state (open toggles + scroll) after reload ── */
   if (window.zfsdashRestore) window.zfsdashRestore(setOpen);

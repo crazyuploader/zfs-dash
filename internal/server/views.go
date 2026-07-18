@@ -173,6 +173,7 @@ func nodeViews(nodes []model.NodeData) []nodeView {
 			SmartctlInfo: n.SmartctlInfo,
 			Pools:        n.Pools,
 			Disks:        n.Disks,
+			System:       n.System,
 		}
 	}
 	return views

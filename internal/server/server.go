@@ -43,12 +43,19 @@ func newHub() *Hub {
 }
 
 // add registers a client channel; returns false when the hub is full.
+// The slot is reserved with a CAS loop so concurrent registrations cannot
+// exceed maxSSEClients.
 func (h *Hub) add(ch chan bool) bool {
-	if h.count.Load() >= maxSSEClients {
-		return false
+	for {
+		n := h.count.Load()
+		if n >= maxSSEClients {
+			return false
+		}
+		if h.count.CompareAndSwap(n, n+1) {
+			break
+		}
 	}
 	h.clients.Store(ch, true)
-	h.count.Add(1)
 	return true
 }
 
@@ -65,7 +72,8 @@ func (h *Hub) broadcast() {
 		select {
 		case ch <- true:
 		default:
-			h.remove(ch)
+			// Channel already holds a pending refresh; drop the duplicate.
+			// The stream writer unregisters the client when it disconnects.
 		}
 		return true
 	})

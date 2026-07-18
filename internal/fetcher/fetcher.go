@@ -24,6 +24,7 @@ type Fetcher struct {
 	client    *http.Client
 	mu        sync.RWMutex
 	endpoints []config.Endpoint
+	gen       uint64 // bumped by SetEndpoints; stale fetches are discarded
 	cacheTTL  time.Duration
 	cache     []model.NodeData
 	expiresAt time.Time
@@ -58,6 +59,7 @@ func (f *Fetcher) SetEndpoints(eps []config.Endpoint) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.endpoints = eps
+	f.gen++
 	f.expiresAt = time.Time{} // invalidates cache
 }
 
@@ -83,35 +85,30 @@ func (f *Fetcher) FetchAll(ctx context.Context) ([]model.NodeData, bool) {
 	}
 	f.mu.RUnlock()
 
-	// Single-flight like behavior could be added here, but for now just standard lock.
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	// Re-check after acquiring write lock
-	if time.Now().Before(f.expiresAt) {
-		// Shallow copy; results are read-only (see above).
-		return append([]model.NodeData{}, f.cache...), true
-	}
-
-	return f.refreshLocked(ctx), false
+	return f.refresh(ctx), false
 }
 
 // Refresh fetches all endpoints unconditionally (bypassing the cache TTL)
 // and updates the cache. Used by the background poller so its cadence is
 // independent of cache_ttl. Results are read-only (see FetchAll).
 func (f *Fetcher) Refresh(ctx context.Context) []model.NodeData {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.refreshLocked(ctx)
+	return f.refresh(ctx)
 }
 
-// refreshLocked runs the concurrent fan-out and stores the result in the
-// cache. Callers must hold f.mu.
-func (f *Fetcher) refreshLocked(ctx context.Context) []model.NodeData {
-	slog.Debug("cache MISS", "endpoints", len(f.endpoints))
-	results := make([]model.NodeData, len(f.endpoints))
+// refresh runs the concurrent fan-out WITHOUT holding f.mu during network
+// I/O: it snapshots the endpoint list and generation under a read lock,
+// fetches unlocked, then publishes the results only if the endpoints have
+// not been swapped by SetEndpoints in the meantime.
+func (f *Fetcher) refresh(ctx context.Context) []model.NodeData {
+	f.mu.RLock()
+	eps := append([]config.Endpoint{}, f.endpoints...)
+	gen := f.gen
+	f.mu.RUnlock()
+
+	slog.Debug("fetching all endpoints", "endpoints", len(eps))
+	results := make([]model.NodeData, len(eps))
 	var wg sync.WaitGroup
-	for i, ep := range f.endpoints {
+	for i, ep := range eps {
 		wg.Add(1)
 		go func(i int, ep config.Endpoint) {
 			defer wg.Done()
@@ -120,8 +117,15 @@ func (f *Fetcher) refreshLocked(ctx context.Context) []model.NodeData {
 	}
 	wg.Wait()
 
-	f.cache = results
-	f.expiresAt = time.Now().Add(f.cacheTTL)
+	f.mu.Lock()
+	if gen == f.gen {
+		f.cache = results
+		f.expiresAt = time.Now().Add(f.cacheTTL)
+	}
+	// Stale generation: endpoints changed mid-fetch; return the results to
+	// this caller but do not overwrite the newer configuration's cache.
+	f.mu.Unlock()
+
 	// Shallow copy; results are read-only (see above).
 	return append([]model.NodeData{}, results...)
 }

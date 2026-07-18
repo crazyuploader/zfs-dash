@@ -1,8 +1,10 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/crazyuploader/zfs-dash/internal/model"
@@ -68,5 +70,18 @@ func TestNodeViewsStripURL(t *testing.T) {
 	v := views[0]
 	if v.Label != "n1" || v.Error != "boom" {
 		t.Errorf("unexpected view: %+v", v)
+	}
+
+	// The serialized form must not contain a url field or the endpoint value.
+	b, err := json.Marshal(views)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	s := string(b)
+	if strings.Contains(s, `"url"`) {
+		t.Errorf("serialized view contains a url field: %s", s)
+	}
+	if strings.Contains(s, "internal:9134") {
+		t.Errorf("serialized view leaks the scrape endpoint: %s", s)
 	}
 }

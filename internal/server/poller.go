@@ -38,11 +38,13 @@ func runPoller(ctx context.Context, f *fetcher.Fetcher, hub *Hub, cfgPtr *atomic
 
 	refresh()
 
-	// Prime fetch: second sample for counter-based rates.
+	// Prime fetch: second sample for counter-based rates. Never wait longer
+	// than the refresh interval itself.
+	primeDelay := min(pollerPrimeDelay, cfgPtr.Load().Refresh)
 	select {
 	case <-ctx.Done():
 		return
-	case <-time.After(pollerPrimeDelay):
+	case <-time.After(primeDelay):
 		refresh()
 	}
 

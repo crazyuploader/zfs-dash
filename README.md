@@ -91,7 +91,7 @@ Charts live at **`/history`**; the History tab appears in the topbar once enable
 | `system/node/mem_used_pct`| Memory used % (node_exporter)|
 | `system/node/load1`       | 1-minute load average        |
 
-zfs-dash prunes data older than the retention window. Each data point takes about 8 bytes: 30 days at a 5-minute interval across 50 disks × 4 metrics ≈ 35 MB.
+zfs-dash prunes data older than the retention window. Each data point stores 8 bytes of values: 30 days at a 5-minute interval across 50 disks × 4 metrics ≈ 14 MB raw, around 35 MB on disk with bbolt key and page overhead.
 
 **Docker:** uncomment the `zfs-dash-data` volume in `docker-compose.yml` and set `history.path: /data/history.db` in your config.
 
