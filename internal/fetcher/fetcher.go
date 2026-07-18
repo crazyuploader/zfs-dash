@@ -27,6 +27,7 @@ type Fetcher struct {
 	cacheTTL  time.Duration
 	cache     []model.NodeData
 	expiresAt time.Time
+	rates     rateTracker
 }
 
 // New creates a Fetcher for the provided endpoints.
@@ -46,6 +47,14 @@ func New(endpoints []config.Endpoint, cacheTTL time.Duration) *Fetcher {
 
 // SetEndpoints updates the target list (for hot-reload).
 func (f *Fetcher) SetEndpoints(eps []config.Endpoint) {
+	urls := make(map[string]struct{}, len(eps))
+	for _, ep := range eps {
+		if ep.NodeExporterURL != "" {
+			urls[ep.NodeExporterURL] = struct{}{}
+		}
+	}
+	f.rates.retain(urls)
+
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.endpoints = eps
@@ -164,17 +173,20 @@ func (f *Fetcher) fetchOne(ctx context.Context, ep config.Endpoint) model.NodeDa
 	var (
 		zfsSamples      []parser.Sample
 		smartctlSamples []parser.Sample
+		nodeSamples     []parser.Sample
 		zfsErr          error
 	)
 
+	// Fetch ZFS plus optional companion exporters concurrently;
+	// companion failures are non-fatal.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		zfsSamples, zfsErr = f.fetchRaw(ctx, ep.Label, ep.URL)
+	}()
 	if ep.SmartctlURL != "" {
-		// Fetch ZFS and smartctl concurrently; smartctl failure is non-fatal.
-		var wg sync.WaitGroup
-		wg.Add(2)
-		go func() {
-			defer wg.Done()
-			zfsSamples, zfsErr = f.fetchRaw(ctx, ep.Label, ep.URL)
-		}()
+		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			var err error
@@ -183,9 +195,23 @@ func (f *Fetcher) fetchOne(ctx context.Context, ep config.Endpoint) model.NodeDa
 				slog.Warn("smartctl fetch failed (disk data unavailable)", "label", ep.Label, "error", err)
 			}
 		}()
-		wg.Wait()
-	} else {
-		zfsSamples, zfsErr = f.fetchRaw(ctx, ep.Label, ep.URL)
+	}
+	if ep.NodeExporterURL != "" {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			var err error
+			nodeSamples, err = f.fetchRaw(ctx, ep.Label, ep.NodeExporterURL)
+			if err != nil {
+				slog.Warn("node_exporter fetch failed (system data unavailable)", "label", ep.Label, "error", err)
+			}
+		}()
+	}
+	wg.Wait()
+
+	if len(nodeSamples) > 0 {
+		nd.System = model.ExtractSystem(nodeSamples)
+		f.rates.apply(ep.NodeExporterURL, nd.System)
 	}
 
 	if zfsErr != nil {

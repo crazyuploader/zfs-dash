@@ -64,6 +64,47 @@ type nodeView struct {
 	SmartctlInfo model.SmartctlInfo `json:"smartctl_info,omitempty"`
 	Pools        []model.Pool       `json:"pools"`
 	Disks        []model.DiskInfo   `json:"disks,omitempty"`
+	System       *model.SystemInfo  `json:"system,omitempty"`
+}
+
+// systemView is the /api/system response row for one endpoint with a
+// node_exporter configured.
+type systemView struct {
+	Label     string            `json:"label"`
+	Location  string            `json:"location,omitempty"`
+	FetchedAt time.Time         `json:"fetched_at"`
+	Error     string            `json:"error,omitempty"`
+	System    *model.SystemInfo `json:"system,omitempty"`
+}
+
+// systemViews returns view rows for nodes that have system data (or where a
+// node_exporter is configured but returned nothing, so the UI can show an
+// error card).
+func systemViews(nodes []model.NodeData, cfg *config.Config) []systemView {
+	configured := make(map[string]bool, len(cfg.Endpoints))
+	for _, ep := range cfg.Endpoints {
+		if ep.NodeExporterURL != "" {
+			configured[ep.Label] = true
+		}
+	}
+	out := []systemView{}
+	for _, n := range nodes {
+		if n.System == nil && !configured[n.Label] {
+			continue
+		}
+		errMsg := ""
+		if n.System == nil {
+			errMsg = "node_exporter unreachable or returned no data"
+		}
+		out = append(out, systemView{
+			Label:     n.Label,
+			Location:  n.Location,
+			FetchedAt: n.FetchedAt,
+			Error:     errMsg,
+			System:    n.System,
+		})
+	}
+	return out
 }
 
 // nodeViews converts fetched node data into its URL-stripped view form.

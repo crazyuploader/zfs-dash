@@ -292,6 +292,14 @@ func registerAPIRoutes(app *fiber.App, f *fetcher.Fetcher, rl fiber.Handler, cfg
 		return c.JSON(nodeViews(nodes))
 	})
 
+	app.Get("/api/system", rl, func(c fiber.Ctx) error {
+		ctx, cancel := context.WithTimeout(c.Context(), httpHandlerTimeout)
+		defer cancel()
+		nodes, isCached := f.FetchAll(ctx)
+		setCacheHeaders(c, f, isCached)
+		return c.JSON(systemViews(nodes, cfgPtr.Load()))
+	})
+
 	app.Get("/api/health/:label", rl, func(c fiber.Ctx) error {
 		curCfg := cfgPtr.Load()
 		return serveHealthCheck(c, f, c.Params("label"), "", curCfg)
