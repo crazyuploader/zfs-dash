@@ -24,9 +24,11 @@ type Fetcher struct {
 	client    *http.Client
 	mu        sync.RWMutex
 	endpoints []config.Endpoint
+	gen       uint64 // bumped by SetEndpoints; stale fetches are discarded
 	cacheTTL  time.Duration
 	cache     []model.NodeData
 	expiresAt time.Time
+	rates     rateTracker
 }
 
 // New creates a Fetcher for the provided endpoints.
@@ -46,9 +48,18 @@ func New(endpoints []config.Endpoint, cacheTTL time.Duration) *Fetcher {
 
 // SetEndpoints updates the target list (for hot-reload).
 func (f *Fetcher) SetEndpoints(eps []config.Endpoint) {
+	urls := make(map[string]struct{}, len(eps))
+	for _, ep := range eps {
+		if ep.NodeExporterURL != "" {
+			urls[ep.NodeExporterURL] = struct{}{}
+		}
+	}
+	f.rates.retain(urls)
+
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.endpoints = eps
+	f.gen++
 	f.expiresAt = time.Time{} // invalidates cache
 }
 
@@ -61,31 +72,43 @@ func (f *Fetcher) CacheInfo() (expiresAt time.Time, ttl time.Duration) {
 
 // FetchAll fetches all endpoints concurrently and returns results in the same order.
 // It returns the results and a boolean indicating if the results were from cache.
+// Results share inner slices with the cache and must be treated as read-only.
 func (f *Fetcher) FetchAll(ctx context.Context) ([]model.NodeData, bool) {
 	f.mu.RLock()
 	if time.Now().Before(f.expiresAt) {
 		slog.Debug("cache HIT", "expires_in", time.Until(f.expiresAt).Round(time.Second))
-		// Return a copy so callers cannot mutate cached data.
+		// Shallow copy: inner slices (Pools, Disks, Datasets) are shared with
+		// the cache — callers must treat results as read-only.
 		data := append([]model.NodeData{}, f.cache...)
 		f.mu.RUnlock()
 		return data, true
 	}
 	f.mu.RUnlock()
 
-	// Single-flight like behavior could be added here, but for now just standard lock.
-	f.mu.Lock()
-	defer f.mu.Unlock()
+	return f.fetchAndStore(ctx), false
+}
 
-	// Re-check after acquiring write lock
-	if time.Now().Before(f.expiresAt) {
-		// Return a copy so callers cannot mutate cached data.
-		return append([]model.NodeData{}, f.cache...), true
-	}
+// Refresh fetches all endpoints unconditionally (bypassing the cache TTL)
+// and updates the cache. Used by the background poller so its cadence is
+// independent of cache_ttl. Results are read-only (see FetchAll).
+func (f *Fetcher) Refresh(ctx context.Context) []model.NodeData {
+	return f.fetchAndStore(ctx)
+}
 
-	slog.Debug("cache MISS", "endpoints", len(f.endpoints))
-	results := make([]model.NodeData, len(f.endpoints))
+// fetchAndStore runs the concurrent fan-out WITHOUT holding f.mu during network
+// I/O: it snapshots the endpoint list and generation under a read lock,
+// fetches unlocked, then publishes the results only if the endpoints have
+// not been swapped by SetEndpoints in the meantime.
+func (f *Fetcher) fetchAndStore(ctx context.Context) []model.NodeData {
+	f.mu.RLock()
+	eps := append([]config.Endpoint{}, f.endpoints...)
+	gen := f.gen
+	f.mu.RUnlock()
+
+	slog.Debug("fetching all endpoints", "endpoints", len(eps))
+	results := make([]model.NodeData, len(eps))
 	var wg sync.WaitGroup
-	for i, ep := range f.endpoints {
+	for i, ep := range eps {
 		wg.Add(1)
 		go func(i int, ep config.Endpoint) {
 			defer wg.Done()
@@ -94,10 +117,17 @@ func (f *Fetcher) FetchAll(ctx context.Context) ([]model.NodeData, bool) {
 	}
 	wg.Wait()
 
-	f.cache = results
-	f.expiresAt = time.Now().Add(f.cacheTTL)
-	// Return a copy so callers cannot mutate cached data.
-	return append([]model.NodeData{}, results...), false
+	f.mu.Lock()
+	if gen == f.gen {
+		f.cache = results
+		f.expiresAt = time.Now().Add(f.cacheTTL)
+	}
+	// Stale generation: endpoints changed mid-fetch; return the results to
+	// this caller but do not overwrite the newer configuration's cache.
+	f.mu.Unlock()
+
+	// Shallow copy; results are read-only (see above).
+	return append([]model.NodeData{}, results...)
 }
 
 // fetchRaw fetches and parses Prometheus text-format metrics from a single URL.
@@ -147,17 +177,20 @@ func (f *Fetcher) fetchOne(ctx context.Context, ep config.Endpoint) model.NodeDa
 	var (
 		zfsSamples      []parser.Sample
 		smartctlSamples []parser.Sample
+		nodeSamples     []parser.Sample
 		zfsErr          error
 	)
 
+	// Fetch ZFS plus optional companion exporters concurrently;
+	// companion failures are non-fatal.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		zfsSamples, zfsErr = f.fetchRaw(ctx, ep.Label, ep.URL)
+	}()
 	if ep.SmartctlURL != "" {
-		// Fetch ZFS and smartctl concurrently; smartctl failure is non-fatal.
-		var wg sync.WaitGroup
-		wg.Add(2)
-		go func() {
-			defer wg.Done()
-			zfsSamples, zfsErr = f.fetchRaw(ctx, ep.Label, ep.URL)
-		}()
+		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			var err error
@@ -166,9 +199,23 @@ func (f *Fetcher) fetchOne(ctx context.Context, ep config.Endpoint) model.NodeDa
 				slog.Warn("smartctl fetch failed (disk data unavailable)", "label", ep.Label, "error", err)
 			}
 		}()
-		wg.Wait()
-	} else {
-		zfsSamples, zfsErr = f.fetchRaw(ctx, ep.Label, ep.URL)
+	}
+	if ep.NodeExporterURL != "" {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			var err error
+			nodeSamples, err = f.fetchRaw(ctx, ep.Label, ep.NodeExporterURL)
+			if err != nil {
+				slog.Warn("node_exporter fetch failed (system data unavailable)", "label", ep.Label, "error", err)
+			}
+		}()
+	}
+	wg.Wait()
+
+	if len(nodeSamples) > 0 {
+		nd.System = model.ExtractSystem(nodeSamples)
+		f.rates.apply(ep.NodeExporterURL, nd.System)
 	}
 
 	if zfsErr != nil {

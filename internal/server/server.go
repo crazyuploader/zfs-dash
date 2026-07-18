@@ -28,14 +28,42 @@ import (
 	"github.com/gofiber/fiber/v3/middleware/logger"
 )
 
+// maxSSEClients caps concurrent /events connections to avoid fd exhaustion.
+const maxSSEClients = 64
+
 // Hub broadcasts reload signals to connected SSE clients.
 // clients is a sync.Map keyed by chan bool.
 type Hub struct {
 	clients sync.Map
+	count   atomic.Int64
 }
 
 func newHub() *Hub {
 	return &Hub{}
+}
+
+// add registers a client channel; returns false when the hub is full.
+// The slot is reserved with a CAS loop so concurrent registrations cannot
+// exceed maxSSEClients.
+func (h *Hub) add(ch chan bool) bool {
+	for {
+		n := h.count.Load()
+		if n >= maxSSEClients {
+			return false
+		}
+		if h.count.CompareAndSwap(n, n+1) {
+			break
+		}
+	}
+	h.clients.Store(ch, true)
+	return true
+}
+
+// remove unregisters a client channel; safe to call more than once.
+func (h *Hub) remove(ch chan bool) {
+	if _, loaded := h.clients.LoadAndDelete(ch); loaded {
+		h.count.Add(-1)
+	}
 }
 
 func (h *Hub) broadcast() {
@@ -44,7 +72,8 @@ func (h *Hub) broadcast() {
 		select {
 		case ch <- true:
 		default:
-			h.clients.Delete(ch)
+			// Channel already holds a pending refresh; drop the duplicate.
+			// The stream writer unregisters the client when it disconnects.
 		}
 		return true
 	})
@@ -56,22 +85,11 @@ const (
 	httpHandlerTimeout = 15 * time.Second
 )
 
-// nodeView is the subset of NodeData serialized into the page's inline JS.
-// URL is intentionally excluded to avoid exposing internal scrape endpoints to browsers.
-type nodeView struct {
-	Label        string             `json:"label"`
-	Location     string             `json:"location,omitempty"`
-	ExporterInfo model.ExporterInfo `json:"exporter_info,omitempty"`
-	SmartctlInfo model.SmartctlInfo `json:"smartctl_info,omitempty"`
-	Pools        []model.Pool       `json:"pools"`
-	Disks        []model.DiskInfo   `json:"disks,omitempty"`
-}
-
-// templateData is the data passed to the HTML template.
+// templateData is the data passed to the dashboard page template.
 type templateData struct {
+	pageData
 	Nodes            []model.NodeData
 	NodesJSON        template.JS // URL-stripped JSON for inline script
-	RefreshSecs      int
 	FetchedAt        string
 	TotalPools       int
 	UnreachableNodes int
@@ -79,7 +97,12 @@ type templateData struct {
 	DegradedPools    int
 	ErroredPools     int
 	TotalNodes       int
-	HistoryEnabled   bool
+}
+
+// historyData is the data passed to the history page template.
+type historyData struct {
+	pageData
+	RetentionHours int
 }
 
 // Start registers routes and begins listening.
@@ -111,17 +134,9 @@ func Start(cfg *config.Config) error {
 		defer func() { _ = histStore.Close() }()
 	}
 
-	tmpl, err := template.New("dashboard").Funcs(funcMap()).Parse(templates.Dashboard)
+	pages, err := templates.Pages(funcMap())
 	if err != nil {
 		return fmt.Errorf("template parse: %w", err)
-	}
-
-	var histTmpl *template.Template
-	if histStore != nil {
-		histTmpl, err = template.New("history").Funcs(funcMap()).Parse(templates.History)
-		if err != nil {
-			return fmt.Errorf("history template parse: %w", err)
-		}
 	}
 
 	app := newFiberApp(cfg)
@@ -131,11 +146,15 @@ func Start(cfg *config.Config) error {
 		Expiration: 1 * time.Minute,
 	})
 
+	// Background poller: the only source of SSE refresh broadcasts.
+	go runPoller(ctx, f, hub, &cfgPtr)
+
 	registerSSERoute(app, hub)
-	registerAPIRoutes(app, f, hub, rl, &cfgPtr)
-	registerDashboardRoute(app, f, hub, tmpl, &cfgPtr, histStore)
+	registerAPIRoutes(app, f, rl, &cfgPtr)
+	registerDashboardRoute(app, f, pages["dashboard"], &cfgPtr, histStore)
+	registerSystemRoute(app, f, pages["system"], &cfgPtr, histStore)
 	if histStore != nil {
-		registerHistoryRoutes(app, rl, histStore, histTmpl, &cfgPtr)
+		registerHistoryRoutes(app, rl, histStore, pages["history"], &cfgPtr)
 	}
 
 	app.Get("/health", func(c fiber.Ctx) error {
@@ -216,18 +235,30 @@ func newFiberApp(cfg *config.Config) *fiber.App {
 }
 
 func registerSSERoute(app *fiber.App, hub *Hub) {
-	app.Get("/events", func(c fiber.Ctx) error {
+	// Long-lived connections get their own, stricter limiter; the real
+	// resource to protect is concurrent connections, capped via hub.add.
+	sseLimiter := limiter.New(limiter.Config{
+		Max:        10,
+		Expiration: 1 * time.Minute,
+	})
+	app.Get("/events", sseLimiter, func(c fiber.Ctx) error {
+		notify := make(chan bool, 1)
+		if !hub.add(notify) {
+			slog.Warn("SSE client rejected: connection cap reached", "cap", maxSSEClients)
+			return fiber.ErrServiceUnavailable
+		}
+
 		c.Set("Content-Type", "text/event-stream")
 		c.Set("Cache-Control", "no-cache")
 		c.Set("Connection", "keep-alive")
 		c.Set("Transfer-Encoding", "chunked")
 
-		notify := make(chan bool, 1)
-		hub.clients.Store(notify, true)
-		defer hub.clients.Delete(notify)
-
 		clientIP := c.IP()
 		c.Response().SetBodyStreamWriter(func(w *bufio.Writer) {
+			// The handler has already returned by the time this runs, so the
+			// client must be unregistered here, not via defer in the handler
+			// (which would remove it before the stream even starts).
+			defer hub.remove(notify)
 			slog.Debug("SSE client connected", "ip", clientIP)
 
 			// Send initial keep-alive
@@ -261,16 +292,21 @@ func registerSSERoute(app *fiber.App, hub *Hub) {
 	})
 }
 
-func registerAPIRoutes(app *fiber.App, f *fetcher.Fetcher, hub *Hub, rl fiber.Handler, cfgPtr *atomic.Pointer[config.Config]) {
+func registerAPIRoutes(app *fiber.App, f *fetcher.Fetcher, rl fiber.Handler, cfgPtr *atomic.Pointer[config.Config]) {
 	app.Get("/api/metrics", rl, func(c fiber.Ctx) error {
 		ctx, cancel := context.WithTimeout(c.Context(), httpHandlerTimeout)
 		defer cancel()
 		nodes, isCached := f.FetchAll(ctx)
-		if !isCached {
-			hub.broadcast()
-		}
 		setCacheHeaders(c, f, isCached)
-		return c.JSON(nodes)
+		return c.JSON(nodeViews(nodes))
+	})
+
+	app.Get("/api/system", rl, func(c fiber.Ctx) error {
+		ctx, cancel := context.WithTimeout(c.Context(), httpHandlerTimeout)
+		defer cancel()
+		nodes, isCached := f.FetchAll(ctx)
+		setCacheHeaders(c, f, isCached)
+		return c.JSON(systemViews(nodes, cfgPtr.Load()))
 	})
 
 	app.Get("/api/health/:label", rl, func(c fiber.Ctx) error {
@@ -284,23 +320,20 @@ func registerAPIRoutes(app *fiber.App, f *fetcher.Fetcher, hub *Hub, rl fiber.Ha
 	})
 }
 
-func registerDashboardRoute(app *fiber.App, f *fetcher.Fetcher, hub *Hub, tmpl *template.Template, cfgPtr *atomic.Pointer[config.Config], histStore *history.Store) {
+func registerDashboardRoute(app *fiber.App, f *fetcher.Fetcher, tmpl *template.Template, cfgPtr *atomic.Pointer[config.Config], histStore *history.Store) {
 	app.Get("/", func(c fiber.Ctx) error {
 		curCfg := cfgPtr.Load()
 		reqCtx, cancel := context.WithTimeout(c.Context(), httpHandlerTimeout)
 		defer cancel()
 
 		nodes, isCached := f.FetchAll(reqCtx)
-		if !isCached {
-			hub.broadcast()
-		}
-		data := buildTemplateData(nodes, curCfg)
-		data.HistoryEnabled = histStore != nil
+		data := buildTemplateData(nodes)
+		data.pageData = newPageData("pools", curCfg, histStore != nil)
 
 		setCacheHeaders(c, f, isCached)
 		c.Set("Cache-Control", "no-store")
 		var buf bytes.Buffer
-		if err := tmpl.Execute(&buf, data); err != nil {
+		if err := tmpl.ExecuteTemplate(&buf, "base", data); err != nil {
 			slog.Error("template execution failed", "error", err)
 			return fiber.ErrInternalServerError
 		}
@@ -310,14 +343,37 @@ func registerDashboardRoute(app *fiber.App, f *fetcher.Fetcher, hub *Hub, tmpl *
 	})
 }
 
+func registerSystemRoute(app *fiber.App, f *fetcher.Fetcher, tmpl *template.Template, cfgPtr *atomic.Pointer[config.Config], histStore *history.Store) {
+	app.Get("/system", func(c fiber.Ctx) error {
+		curCfg := cfgPtr.Load()
+		reqCtx, cancel := context.WithTimeout(c.Context(), httpHandlerTimeout)
+		defer cancel()
+
+		nodes, isCached := f.FetchAll(reqCtx)
+		data := buildSystemPageData(systemViews(nodes, curCfg))
+		data.pageData = newPageData("system", curCfg, histStore != nil)
+
+		setCacheHeaders(c, f, isCached)
+		c.Set("Cache-Control", "no-store")
+		var buf bytes.Buffer
+		if err := tmpl.ExecuteTemplate(&buf, "base", data); err != nil {
+			slog.Error("system template execution failed", "error", err)
+			return fiber.ErrInternalServerError
+		}
+		c.Set("Content-Type", "text/html; charset=utf-8")
+		return c.Send(buf.Bytes())
+	})
+}
+
 func registerHistoryRoutes(app *fiber.App, rl fiber.Handler, histStore *history.Store, histTmpl *template.Template, cfgPtr *atomic.Pointer[config.Config]) {
 	app.Get("/history", func(c fiber.Ctx) error {
 		curCfg := cfgPtr.Load()
 		var buf bytes.Buffer
-		if err := histTmpl.Execute(&buf, map[string]any{
-			"RefreshSecs":    int(curCfg.Refresh.Seconds()),
-			"RetentionHours": int(histStore.Retention().Hours()),
-		}); err != nil {
+		data := historyData{
+			pageData:       newPageData("history", curCfg, true),
+			RetentionHours: int(histStore.Retention().Hours()),
+		}
+		if err := histTmpl.ExecuteTemplate(&buf, "base", data); err != nil {
 			slog.Error("history template execution failed", "error", err)
 			return fiber.ErrInternalServerError
 		}
@@ -357,6 +413,9 @@ func registerHistoryRoutes(app *fiber.App, rl fiber.Handler, histStore *history.
 		if fromUnix > 0 {
 			from = time.Unix(fromUnix, 0)
 		}
+		if from.After(to) {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "from must be before to"})
+		}
 
 		points, err := histStore.Query(key, from, to, bucketSecs)
 		if err != nil {
@@ -391,6 +450,9 @@ func parseHistoryQueryParams(c fiber.Ctx) (fromUnix, toUnix, bucketSecs int64, e
 	if fromUnix < 0 || toUnix < 0 {
 		return 0, 0, 0, fmt.Errorf("timestamps must be non-negative")
 	}
+	if bucketSecs < 0 {
+		return 0, 0, 0, fmt.Errorf("bucket must be non-negative")
+	}
 	return fromUnix, toUnix, bucketSecs, nil
 }
 
@@ -420,20 +482,20 @@ func setupLogger(cfg *config.Config) {
 	slog.SetDefault(slog.New(handler))
 }
 
-func buildTemplateData(nodes []model.NodeData, cfg *config.Config) templateData {
-	views := make([]nodeView, len(nodes))
-	for i, n := range nodes {
-		views[i] = nodeView{Label: n.Label, Location: n.Location, ExporterInfo: n.ExporterInfo, SmartctlInfo: n.SmartctlInfo, Pools: n.Pools, Disks: n.Disks}
+func buildTemplateData(nodes []model.NodeData) templateData {
+	// Node structs are copies (FetchAll returns a fresh outer slice), so
+	// sanitizing Error in place does not touch the fetcher cache.
+	for i := range nodes {
+		nodes[i].Error = sanitizeError(nodes[i].Error, nodes[i].URL)
 	}
-	nodesJSON, _ := json.Marshal(views)
+	nodesJSON, _ := json.Marshal(nodeViews(nodes))
 
 	d := templateData{
-		Nodes:       nodes,
-		NodesJSON:   template.JS(nodesJSON), //nolint:gosec // skipcq: GSC-G203 -- json.Marshal output is safe for inline JS
-		RefreshSecs: int(cfg.Refresh.Seconds()),
-		FetchedAt:   time.Now().Format("15:04:05"),
-		TotalNodes:  len(nodes),
-		// HistoryEnabled is set by the caller after buildTemplateData returns.
+		Nodes:      nodes,
+		NodesJSON:  template.JS(nodesJSON), //nolint:gosec // skipcq: GSC-G203 -- json.Marshal output is safe for inline JS
+		FetchedAt:  time.Now().Format("15:04:05"),
+		TotalNodes: len(nodes),
+		// pageData is set by the caller after buildTemplateData returns.
 	}
 	for _, n := range nodes {
 		if n.Error != "" {
@@ -612,6 +674,10 @@ func setCacheHeaders(c fiber.Ctx, f *fetcher.Fetcher, isCached bool) {
 func funcMap() template.FuncMap {
 	return template.FuncMap{
 		"humanBytes":     model.HumanBytes,
+		"fmtRate":        fmtRate,
+		"fmtUptime":      fmtUptime,
+		"loadClass":      loadClass,
+		"pctClass":       pctClass,
 		"healthClass":    healthClass,
 		"fmtNodeTime":    fmtNodeTime,
 		"toJSON":         toJSON,
@@ -628,8 +694,66 @@ func funcMap() template.FuncMap {
 		"gte":            func(a, b float64) bool { return a >= b },
 		"mul100":         func(f float64) float64 { return f * 100 },
 		"mul512":         func(f float64) float64 { return f * 512 },
-		"join":           strings.Join,
-		"dict":           dict,
+		"add":            func(a, b float64) float64 { return a + b },
+		"sub":            func(a, b float64) float64 { return a - b },
+		"percent": func(part, total float64) float64 {
+			if total <= 0 {
+				return 0
+			}
+			return part / total
+		},
+		"memUsed": func(s *model.SystemInfo) float64 { return s.MemTotal - s.MemAvailable },
+		"join":    strings.Join,
+		"dict":    dict,
+	}
+}
+
+// fmtRate renders a bytes-per-second rate with IEC units.
+func fmtRate(bps float64) string {
+	return model.HumanBytes(bps) + "/s"
+}
+
+// fmtUptime renders seconds as "12d 4h" / "4h 23m" / "23m".
+func fmtUptime(secs float64) string {
+	total := int(secs)
+	days := total / 86400
+	hrs := (total % 86400) / 3600
+	mins := (total % 3600) / 60
+	switch {
+	case days > 0:
+		return fmt.Sprintf("%dd %dh", days, hrs)
+	case hrs > 0:
+		return fmt.Sprintf("%dh %dm", hrs, mins)
+	default:
+		return fmt.Sprintf("%dm", mins)
+	}
+}
+
+// loadClass colors a load average relative to core count.
+func loadClass(load float64, cores int) string {
+	if cores <= 0 {
+		return ""
+	}
+	ratio := load / float64(cores)
+	switch {
+	case ratio >= 1.0:
+		return "bad"
+	case ratio >= 0.7:
+		return "warn"
+	default:
+		return "ok"
+	}
+}
+
+// pctClass colors a usage percentage with the standard thresholds.
+func pctClass(pct float64) string {
+	switch {
+	case pct >= 90:
+		return "bad"
+	case pct >= 75:
+		return "warn"
+	default:
+		return ""
 	}
 }
 

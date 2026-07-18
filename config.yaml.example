@@ -1,5 +1,5 @@
 addr: ":8054"
-refresh: 300
+refresh: 300 # seconds; duration strings also accepted, e.g. "5m"
 cache_ttl: 30 # cache fetched metrics for 30 seconds
 max_usage_percent: 90 # fail health check if any pool > 90% full
 log_format: "text" # "text" or "json"
@@ -19,8 +19,10 @@ endpoints:
   - url: "http://host1:9134/metrics"
     label: "node-1"
     location: "Singapore"
-    smartctl_url: "http://host1:9633/metrics" # optional: smartctl-exporter for disk health
+    smartctl_url: "http://host1:9633/metrics"       # optional: smartctl-exporter for disk health
+    node_exporter_url: "http://host1:9100/metrics"  # optional: node_exporter for the System tab (CPU/RAM/load/temps)
   - url: "http://host2:9134/metrics"
     label: "node-2"
     location: "Mumbai"
     # no smartctl_url — disk section will not appear for this node
+    # no node_exporter_url — node will not appear on the System tab

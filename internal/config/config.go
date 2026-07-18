@@ -3,17 +3,19 @@ package config
 import (
 	"cmp"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/spf13/viper"
 )
 
-// Endpoint is a single ZFS exporter target with an optional smartctl exporter.
+// Endpoint is a single ZFS exporter target with optional companion exporters.
 type Endpoint struct {
-	URL         string `mapstructure:"url"`
-	Label       string `mapstructure:"label"`
-	Location    string `mapstructure:"location"`
-	SmartctlURL string `mapstructure:"smartctl_url"` // optional; omit to skip disk metrics
+	URL             string `mapstructure:"url"`
+	Label           string `mapstructure:"label"`
+	Location        string `mapstructure:"location"`
+	SmartctlURL     string `mapstructure:"smartctl_url"`      // optional; omit to skip disk metrics
+	NodeExporterURL string `mapstructure:"node_exporter_url"` // optional; omit to skip system metrics
 }
 
 // HistoryConfig controls the embedded time-series store.
@@ -37,6 +39,38 @@ type Config struct {
 	History         HistoryConfig
 }
 
+// parseFlexDuration converts a config value into a duration.
+// Accepts bare numbers (seconds, back-compat), numeric strings (seconds),
+// and Go duration strings ("5m", "1h30m"). Returns def when v is nil,
+// unparseable, or non-positive.
+func parseFlexDuration(v any, def time.Duration) time.Duration {
+	var d time.Duration
+	switch t := v.(type) {
+	case nil:
+		return def
+	case int:
+		d = time.Duration(t) * time.Second
+	case int64:
+		d = time.Duration(t) * time.Second
+	case float64:
+		d = time.Duration(t * float64(time.Second))
+	case string:
+		if secs, err := strconv.Atoi(t); err == nil {
+			d = time.Duration(secs) * time.Second
+		} else if parsed, err := time.ParseDuration(t); err == nil {
+			d = parsed
+		} else {
+			return def
+		}
+	default:
+		return def
+	}
+	if d <= 0 {
+		return def
+	}
+	return d
+}
+
 // Load reads viper state into a validated Config.
 func Load() (*Config, error) {
 	histRetention := viper.GetDuration("history.retention")
@@ -45,7 +79,7 @@ func Load() (*Config, error) {
 	}
 	cfg := &Config{
 		Addr:            viper.GetString("addr"),
-		Refresh:         time.Duration(viper.GetInt("refresh")) * time.Second,
+		Refresh:         parseFlexDuration(viper.Get("refresh"), 300*time.Second),
 		CacheTTL:        time.Duration(cmp.Or(viper.GetInt("cache_ttl"), 30)) * time.Second,
 		Debug:           viper.GetBool("debug"),
 		TrustedProxies:  viper.GetStringSlice("trusted_proxies"),
@@ -58,10 +92,6 @@ func Load() (*Config, error) {
 			RecordInterval: viper.GetDuration("history.record_interval"),
 		},
 	}
-	if cfg.Refresh <= 0 {
-		cfg.Refresh = 300 * time.Second
-	}
-
 	// Try structured endpoints block (config file).
 	var eps []Endpoint
 	if viper.IsSet("endpoints") {

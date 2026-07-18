@@ -134,6 +134,7 @@ type NodeData struct {
 	SmartctlInfo SmartctlInfo `json:"smartctl_info,omitempty"`
 	Pools        []Pool       `json:"pools"`
 	Disks        []DiskInfo   `json:"disks,omitempty"`
+	System       *SystemInfo  `json:"system,omitempty"`
 }
 
 func healthFromValue(v float64) PoolHealth {
@@ -501,10 +502,11 @@ func finalizePool(p *Pool) {
 	})
 }
 
-// HumanBytes returns a human-readable byte string (e.g. "3.72 TB").
+// HumanBytes returns a human-readable byte string using IEC units
+// (e.g. "3.72 TiB") — the divisor is 1024, so the labels say so.
 func HumanBytes(b float64) string {
 	const unit = 1024.0
-	units := []string{"KB", "MB", "GB", "TB", "PB", "EB"}
+	units := []string{"KiB", "MiB", "GiB", "TiB", "PiB", "EiB"}
 	if b < unit {
 		return fmt.Sprintf("%.0f B", b)
 	}
