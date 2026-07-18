@@ -82,6 +82,26 @@ func (r *Recorder) record(ctx context.Context) {
 				})
 			}
 		}
+		if sys := node.System; sys != nil {
+			// Fixed "node" name component keeps series keys stable even if
+			// the reported hostname changes.
+			if sys.HasCPURates {
+				samples = append(samples, Sample{
+					Key: SeriesKey(node.Label, "system", "node", "cpu_pct"),
+					Ts:  now, Value: sys.CPUBusyPct,
+				})
+			}
+			if sys.MemTotal > 0 {
+				samples = append(samples, Sample{
+					Key: SeriesKey(node.Label, "system", "node", "mem_used_pct"),
+					Ts:  now, Value: sys.MemUsedPct,
+				})
+			}
+			samples = append(samples, Sample{
+				Key: SeriesKey(node.Label, "system", "node", "load1"),
+				Ts:  now, Value: sys.Load1,
+			})
+		}
 		for _, disk := range node.Disks {
 			if disk.HasTemperature {
 				samples = append(samples, Sample{

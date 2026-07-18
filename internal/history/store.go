@@ -32,9 +32,9 @@ type Sample struct {
 type SeriesInfo struct {
 	Key    string `json:"key"`
 	Node   string `json:"node"`
-	Kind   string `json:"kind"`   // "pool" or "disk"
-	Name   string `json:"name"`   // pool name or device path
-	Metric string `json:"metric"` // e.g. "used_pct", "temp_c"
+	Kind   string `json:"kind"`   // "pool", "disk", or "system"
+	Name   string `json:"name"`   // pool name, device path, or "node"
+	Metric string `json:"metric"` // e.g. "used_pct", "temp_c", "cpu_pct"
 }
 
 // Store is a bbolt-backed time-series store.

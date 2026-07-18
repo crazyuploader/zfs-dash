@@ -248,7 +248,10 @@ canvas#chart { display:block; width:100%; }
     used_pct: 'Usage %', alloc_bytes: 'Allocated', free_bytes: 'Free',
     temp_c: 'Temp °C', wear_pct: 'NVMe Wear %', wear_lvl: 'Wear Level',
     pow_hrs: 'Pwr-On Hrs',
+    cpu_pct: 'CPU %', mem_used_pct: 'Memory %', load1: 'Load 1m',
   };
+  const KIND_LABELS = { pool: 'Pools', disk: 'Disks', system: 'System' };
+  const PCT_METRICS = { used_pct: 1, wear_pct: 1, cpu_pct: 1, mem_used_pct: 1 };
 
   /* ── State ── */
   let allSeries = [];
@@ -313,7 +316,7 @@ canvas#chart { display:block; width:100%; }
 
         const kh = document.createElement('div');
         kh.className = 'kind-header';
-        kh.textContent = kind === 'pool' ? 'Pools' : 'Disks';
+        kh.textContent = KIND_LABELS[kind] || kind;
         kg.appendChild(kh);
 
         for (const [diskName, metrics] of Object.entries(disks)) {
@@ -625,9 +628,10 @@ canvas#chart { display:block; width:100%; }
   /* ── Helpers ── */
   function fmtVal(v, metric) {
     if (metric === 'alloc_bytes' || metric === 'free_bytes') return fmtBytes(v * (1 << 20));
-    if (metric === 'used_pct' || metric === 'wear_pct') return v.toFixed(1) + '%';
+    if (PCT_METRICS[metric]) return v.toFixed(1) + '%';
     if (metric === 'temp_c') return v.toFixed(1) + '°';
     if (metric === 'pow_hrs') return v.toFixed(0) + 'h';
+    if (metric === 'load1') return v.toFixed(2);
     if (v >= 1e6) return (v/1e6).toFixed(1) + 'M';
     if (v >= 1e3) return (v/1e3).toFixed(1) + 'K';
     return v.toFixed(1);
@@ -635,7 +639,7 @@ canvas#chart { display:block; width:100%; }
   function fmtValFull(v, metric) {
     if (!metric) return v.toFixed(2);
     if (metric === 'alloc_bytes' || metric === 'free_bytes') return fmtBytes(v * (1 << 20));
-    if (metric === 'used_pct' || metric === 'wear_pct') return v.toFixed(2) + '%';
+    if (PCT_METRICS[metric]) return v.toFixed(2) + '%';
     if (metric === 'temp_c') return v.toFixed(1) + '°C';
     if (metric === 'pow_hrs') return v.toFixed(0) + 'h';
     return v.toFixed(2);
