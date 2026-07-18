@@ -23,6 +23,7 @@ type rateTracker struct {
 // and stores sys's counters as the new snapshot. Negative deltas (counter
 // reset after a reboot) and sub-second intervals leave the Has*Rates flags
 // false.
+// skipcq: GO-R1005 -- guard clauses per counter family, not deep branching
 func (r *rateTracker) apply(url string, sys *model.SystemInfo) {
 	if sys == nil || sys.Counters == nil {
 		return

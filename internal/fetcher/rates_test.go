@@ -7,7 +7,7 @@ import (
 	"github.com/crazyuploader/zfs-dash/internal/model"
 )
 
-func snapshot(cpuTotal, cpuIdle, cpuIOWait float64, netRx, netTx float64) *model.SystemInfo {
+func snapshot(cpuTotal, cpuIdle, cpuIOWait, netRx, netTx float64) *model.SystemInfo {
 	return &model.SystemInfo{
 		Nets: []model.NetDev{{Name: "eth0"}},
 		Counters: &model.SystemCounters{

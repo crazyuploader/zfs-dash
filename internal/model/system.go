@@ -112,6 +112,9 @@ func skipNetDevice(name string) bool {
 // ExtractSystem builds a SystemInfo from node_exporter samples.
 // Counter-based fields (CPU %, net rates, pressure %) are left unset here;
 // the fetcher's rate tracker fills them from consecutive snapshots.
+// One flat switch over sample names keeps extraction in a single pass;
+// complexity is inherent to the metric count, not branching logic.
+// skipcq: GO-R1005
 func ExtractSystem(samples []parser.Sample) *SystemInfo {
 	if len(samples) == 0 {
 		return nil

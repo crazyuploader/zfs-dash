@@ -139,7 +139,8 @@ func systemViews(nodes []model.NodeData, cfg *config.Config) []systemView {
 			configured[ep.Label] = true
 		}
 	}
-	out := []systemView{}
+	// make (not var) so an empty result marshals as [] rather than null.
+	out := make([]systemView, 0, len(nodes))
 	for _, n := range nodes {
 		if n.System == nil && !configured[n.Label] {
 			continue

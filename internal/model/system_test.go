@@ -67,6 +67,7 @@ func parseFixture(t *testing.T) []parser.Sample {
 	return samples
 }
 
+// skipcq: GO-R1005 -- one assertion block per extracted field group
 func TestExtractSystem(t *testing.T) {
 	sys := ExtractSystem(parseFixture(t))
 	if sys == nil {

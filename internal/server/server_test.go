@@ -1,6 +1,7 @@
 package server
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
@@ -43,7 +44,7 @@ func TestParseHistoryQueryParams(t *testing.T) {
 				from, to, bucket, err = parseHistoryQueryParams(c)
 				return nil
 			})
-			req := httptest.NewRequest("GET", "/t?"+tt.query, nil)
+			req := httptest.NewRequest("GET", "/t?"+tt.query, http.NoBody)
 			if _, terr := app.Test(req); terr != nil {
 				t.Fatalf("app.Test: %v", terr)
 			}
