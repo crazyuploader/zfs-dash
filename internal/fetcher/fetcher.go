@@ -84,6 +84,21 @@ func (f *Fetcher) FetchAll(ctx context.Context) ([]model.NodeData, bool) {
 		return append([]model.NodeData{}, f.cache...), true
 	}
 
+	return f.refreshLocked(ctx), false
+}
+
+// Refresh fetches all endpoints unconditionally (bypassing the cache TTL)
+// and updates the cache. Used by the background poller so its cadence is
+// independent of cache_ttl. Results are read-only (see FetchAll).
+func (f *Fetcher) Refresh(ctx context.Context) []model.NodeData {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.refreshLocked(ctx)
+}
+
+// refreshLocked runs the concurrent fan-out and stores the result in the
+// cache. Callers must hold f.mu.
+func (f *Fetcher) refreshLocked(ctx context.Context) []model.NodeData {
 	slog.Debug("cache MISS", "endpoints", len(f.endpoints))
 	results := make([]model.NodeData, len(f.endpoints))
 	var wg sync.WaitGroup
@@ -99,7 +114,7 @@ func (f *Fetcher) FetchAll(ctx context.Context) ([]model.NodeData, bool) {
 	f.cache = results
 	f.expiresAt = time.Now().Add(f.cacheTTL)
 	// Shallow copy; results are read-only (see above).
-	return append([]model.NodeData{}, results...), false
+	return append([]model.NodeData{}, results...)
 }
 
 // fetchRaw fetches and parses Prometheus text-format metrics from a single URL.

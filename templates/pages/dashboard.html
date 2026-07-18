@@ -1,5 +1,7 @@
 {{define "title"}}ZFS Dashboard{{end}}
 
+{{define "body-attrs"}} data-reload-on-refresh{{end}}
+
 {{define "styles"}}
 <style>
 /* ── Main ── */
@@ -1032,54 +1034,54 @@
   const nodes = {{.NodesJSON}};
   const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  /* ── Alert section toggles ── */
-  ['unreachable', 'degraded', 'faulted'].forEach(function (id) {
-    const toggle  = document.getElementById('toggle-' + id);
-    const body    = document.getElementById('body-' + id);
-    const arrow   = document.getElementById('arrow-' + id);
-    const divider = document.getElementById('divider-' + id);
-    if (!toggle || !body) return;
-
-    toggle.addEventListener('click', function () {
-      const isOpen = toggle.getAttribute('aria-expanded') === 'true';
-      const nowOpen = !isOpen;
-      toggle.setAttribute('aria-expanded', String(nowOpen));
-      body.classList.toggle('collapsed', !nowOpen);
+  /* ── Collapsible toggles ──
+     setOpen(trigger, open) is the single code path for opening/closing any
+     collapsible — used by click handlers AND by state restore after reload. */
+  function setOpen(trigger, nowOpen) {
+    const id = trigger.id || '';
+    trigger.setAttribute('aria-expanded', String(nowOpen));
+    if (id.indexOf('toggle-') === 0 && id.indexOf('disk-toggle-') !== 0) {
+      // Alert sections: toggle-degraded / toggle-faulted / toggle-unreachable
+      const key = id.replace('toggle-', '');
+      const body    = document.getElementById('body-' + key);
+      const arrow   = document.getElementById('arrow-' + key);
+      const divider = document.getElementById('divider-' + key);
+      if (body)    body.classList.toggle('collapsed', !nowOpen);
       if (arrow)   arrow.classList.toggle('open', nowOpen);
       if (divider) divider.classList.toggle('hidden', !nowOpen);
-    });
-  });
-
-  /* ── Disk section toggles ── */
-  document.querySelectorAll('[id^="disk-toggle-"]').forEach(function (toggle) {
-    const idx     = toggle.id.replace('disk-toggle-', '');
-    const list    = document.getElementById('disk-list-' + idx);
-    const chevron = document.getElementById('disk-chevron-' + idx);
-    if (!list) return;
-    toggle.addEventListener('click', function () {
-      const nowOpen = toggle.getAttribute('aria-expanded') !== 'true';
-      toggle.setAttribute('aria-expanded', String(nowOpen));
-      list.classList.toggle('open', nowOpen);
+    } else if (id.indexOf('disk-toggle-') === 0) {
+      const idx     = id.replace('disk-toggle-', '');
+      const list    = document.getElementById('disk-list-' + idx);
+      const chevron = document.getElementById('disk-chevron-' + idx);
+      if (list)    list.classList.toggle('open', nowOpen);
       if (chevron) chevron.classList.toggle('open', nowOpen);
-    });
+    } else if (id.indexOf('disk-row-') === 0) {
+      const suffix = id.replace('disk-row-', '');
+      const detail = document.getElementById('disk-detail-' + suffix);
+      const hint   = trigger.querySelector('.disk-expand-hint');
+      if (detail) detail.classList.toggle('open', nowOpen);
+      if (hint)   hint.textContent = nowOpen ? '▴' : '▾';
+      trigger.classList.toggle('disk-row-open', nowOpen);
+    }
+  }
+
+  function flip(trigger) {
+    setOpen(trigger, trigger.getAttribute('aria-expanded') !== 'true');
+  }
+
+  ['toggle-degraded', 'toggle-faulted', 'toggle-unreachable'].forEach(function (id) {
+    const toggle = document.getElementById(id);
+    if (toggle) toggle.addEventListener('click', function () { flip(toggle); });
   });
 
-  /* ── Disk row expand ── */
+  document.querySelectorAll('[id^="disk-toggle-"]').forEach(function (toggle) {
+    toggle.addEventListener('click', function () { flip(toggle); });
+  });
+
   document.querySelectorAll('[id^="disk-row-"]').forEach(function (row) {
-    const suffix = row.id.replace('disk-row-', '');
-    const detail = document.getElementById('disk-detail-' + suffix);
-    const hint   = row.querySelector('.disk-expand-hint');
-    if (!detail) return;
-    function toggle() {
-      const nowOpen = row.getAttribute('aria-expanded') !== 'true';
-      row.setAttribute('aria-expanded', String(nowOpen));
-      detail.classList.toggle('open', nowOpen);
-      if (hint) hint.textContent = nowOpen ? '▴' : '▾';
-      row.classList.toggle('disk-row-open', nowOpen);
-    }
-    row.addEventListener('click', toggle);
+    row.addEventListener('click', function () { flip(row); });
     row.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flip(row); }
     });
   });
 
@@ -1201,7 +1203,9 @@
     });
   }
 
-  /* ── Auto-refresh progress bar & reload ── */
+  /* ── Auto-refresh progress bar ──
+     Reload itself is driven by the shared SSE handler (see shared_js);
+     this bar just visualizes the expected refresh interval. */
   const REFRESH_MS = {{.RefreshSecs}} * 1000;
   const rbar = document.getElementById('rbar');
   const startAt = Date.now();
@@ -1213,26 +1217,8 @@
   }
   requestAnimationFrame(tickBar);
 
-  // Fallback full-page reload
-  const reloadTimer = setTimeout(function () { location.reload(); }, REFRESH_MS);
-
-  /* ── Real-time SSE ── */
-  function connectSSE() {
-    const es = new EventSource('/events');
-
-    es.onmessage = function(e) {
-      if (e.data === 'refresh') {
-        clearTimeout(reloadTimer);
-        location.reload();
-      }
-    };
-
-    es.onerror = function() {
-      es.close();
-      setTimeout(connectSSE, 5000);
-    };
-  }
-  connectSSE();
+  /* ── Restore UI state (open toggles + scroll) after reload ── */
+  if (window.zfsdashRestore) window.zfsdashRestore(setOpen);
 })();
 </script>
 {{end}}

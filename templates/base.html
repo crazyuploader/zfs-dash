@@ -11,7 +11,7 @@
 </style>
 {{block "styles" .}}{{end}}
 </head>
-<body>
+<body{{block "body-attrs" .}}{{end}}>
 {{template "topbar" .}}
 {{block "content" .}}{{end}}
 {{template "shared_js" .}}

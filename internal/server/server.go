@@ -138,9 +138,12 @@ func Start(cfg *config.Config) error {
 		Expiration: 1 * time.Minute,
 	})
 
+	// Background poller: the only source of SSE refresh broadcasts.
+	go runPoller(ctx, f, hub, &cfgPtr)
+
 	registerSSERoute(app, hub)
-	registerAPIRoutes(app, f, hub, rl, &cfgPtr)
-	registerDashboardRoute(app, f, hub, pages["dashboard"], &cfgPtr, histStore)
+	registerAPIRoutes(app, f, rl, &cfgPtr)
+	registerDashboardRoute(app, f, pages["dashboard"], &cfgPtr, histStore)
 	if histStore != nil {
 		registerHistoryRoutes(app, rl, histStore, pages["history"], &cfgPtr)
 	}
@@ -280,14 +283,11 @@ func registerSSERoute(app *fiber.App, hub *Hub) {
 	})
 }
 
-func registerAPIRoutes(app *fiber.App, f *fetcher.Fetcher, hub *Hub, rl fiber.Handler, cfgPtr *atomic.Pointer[config.Config]) {
+func registerAPIRoutes(app *fiber.App, f *fetcher.Fetcher, rl fiber.Handler, cfgPtr *atomic.Pointer[config.Config]) {
 	app.Get("/api/metrics", rl, func(c fiber.Ctx) error {
 		ctx, cancel := context.WithTimeout(c.Context(), httpHandlerTimeout)
 		defer cancel()
 		nodes, isCached := f.FetchAll(ctx)
-		if !isCached {
-			hub.broadcast()
-		}
 		setCacheHeaders(c, f, isCached)
 		return c.JSON(nodeViews(nodes))
 	})
@@ -303,16 +303,13 @@ func registerAPIRoutes(app *fiber.App, f *fetcher.Fetcher, hub *Hub, rl fiber.Ha
 	})
 }
 
-func registerDashboardRoute(app *fiber.App, f *fetcher.Fetcher, hub *Hub, tmpl *template.Template, cfgPtr *atomic.Pointer[config.Config], histStore *history.Store) {
+func registerDashboardRoute(app *fiber.App, f *fetcher.Fetcher, tmpl *template.Template, cfgPtr *atomic.Pointer[config.Config], histStore *history.Store) {
 	app.Get("/", func(c fiber.Ctx) error {
 		curCfg := cfgPtr.Load()
 		reqCtx, cancel := context.WithTimeout(c.Context(), httpHandlerTimeout)
 		defer cancel()
 
 		nodes, isCached := f.FetchAll(reqCtx)
-		if !isCached {
-			hub.broadcast()
-		}
 		data := buildTemplateData(nodes)
 		data.pageData = newPageData("pools", curCfg, histStore != nil)
 

@@ -60,6 +60,76 @@
       .replaceAll('&','&amp;').replaceAll('<','&lt;')
       .replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
   };
+
+  /* ── UI state persistence across reloads ──
+     Saves scroll position + open collapsibles (by trigger id) to
+     sessionStorage; pages with collapsibles register a setOpen handler via
+     zfsdashRestore so restore uses the same code path as clicks. */
+  var stateKey = 'zfsdash:ui:' + location.pathname;
+
+  function saveState() {
+    try {
+      var open = Array.prototype.map.call(
+        document.querySelectorAll('[aria-expanded="true"]'),
+        function (el) { return el.id; }
+      ).filter(Boolean);
+      sessionStorage.setItem(stateKey, JSON.stringify({ y: window.scrollY, open: open }));
+    } catch (_) {}
+  }
+  window.addEventListener('pagehide', saveState);
+
+  window.zfsdashRestore = function (setOpen) {
+    var raw;
+    try {
+      raw = sessionStorage.getItem(stateKey);
+      if (raw) sessionStorage.removeItem(stateKey);
+    } catch (_) { return; }
+    if (!raw) return;
+    try {
+      var st = JSON.parse(raw);
+      (st.open || []).forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el && setOpen) setOpen(el, true);
+      });
+      if (st.y) window.scrollTo(0, st.y);
+    } catch (_) {}
+  };
+
+  /* ── SSE: live-dot state + server-driven reload ──
+     The dot goes grey when the event stream is down. Pages that opt into
+     reload-on-refresh (data-reload-on-refresh on <body>) reload when the
+     server broadcasts, with a timer fallback at 1.5× the refresh interval. */
+  var dot = document.getElementById('live-dot');
+  var reloadOnRefresh = document.body.hasAttribute('data-reload-on-refresh');
+  var REFRESH_MS = {{.RefreshSecs}} * 1000;
+  var reloadTimer = null;
+
+  function doReload() {
+    saveState();
+    location.reload();
+  }
+  if (reloadOnRefresh) {
+    reloadTimer = setTimeout(doReload, REFRESH_MS * 1.5);
+  }
+
+  function connectSSE() {
+    var es = new EventSource('/events');
+    es.onopen = function () {
+      if (dot) dot.classList.remove('offline');
+    };
+    es.onmessage = function (e) {
+      if (e.data === 'refresh' && reloadOnRefresh) {
+        clearTimeout(reloadTimer);
+        doReload();
+      }
+    };
+    es.onerror = function () {
+      if (dot) dot.classList.add('offline');
+      es.close();
+      setTimeout(connectSSE, 5000);
+    };
+  }
+  connectSSE();
 })();
 </script>
 {{end}}
