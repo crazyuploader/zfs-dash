@@ -144,6 +144,7 @@ func Start(cfg *config.Config) error {
 	registerSSERoute(app, hub)
 	registerAPIRoutes(app, f, rl, &cfgPtr)
 	registerDashboardRoute(app, f, pages["dashboard"], &cfgPtr, histStore)
+	registerSystemRoute(app, f, pages["system"], &cfgPtr, histStore)
 	if histStore != nil {
 		registerHistoryRoutes(app, rl, histStore, pages["history"], &cfgPtr)
 	}
@@ -329,6 +330,28 @@ func registerDashboardRoute(app *fiber.App, f *fetcher.Fetcher, tmpl *template.T
 			return fiber.ErrInternalServerError
 		}
 
+		c.Set("Content-Type", "text/html; charset=utf-8")
+		return c.Send(buf.Bytes())
+	})
+}
+
+func registerSystemRoute(app *fiber.App, f *fetcher.Fetcher, tmpl *template.Template, cfgPtr *atomic.Pointer[config.Config], histStore *history.Store) {
+	app.Get("/system", func(c fiber.Ctx) error {
+		curCfg := cfgPtr.Load()
+		reqCtx, cancel := context.WithTimeout(c.Context(), httpHandlerTimeout)
+		defer cancel()
+
+		nodes, isCached := f.FetchAll(reqCtx)
+		data := buildSystemPageData(systemViews(nodes, curCfg))
+		data.pageData = newPageData("system", curCfg, histStore != nil)
+
+		setCacheHeaders(c, f, isCached)
+		c.Set("Cache-Control", "no-store")
+		var buf bytes.Buffer
+		if err := tmpl.ExecuteTemplate(&buf, "base", data); err != nil {
+			slog.Error("system template execution failed", "error", err)
+			return fiber.ErrInternalServerError
+		}
 		c.Set("Content-Type", "text/html; charset=utf-8")
 		return c.Send(buf.Bytes())
 	})
@@ -643,6 +666,10 @@ func setCacheHeaders(c fiber.Ctx, f *fetcher.Fetcher, isCached bool) {
 func funcMap() template.FuncMap {
 	return template.FuncMap{
 		"humanBytes":     model.HumanBytes,
+		"fmtRate":        fmtRate,
+		"fmtUptime":      fmtUptime,
+		"loadClass":      loadClass,
+		"pctClass":       pctClass,
 		"healthClass":    healthClass,
 		"fmtNodeTime":    fmtNodeTime,
 		"toJSON":         toJSON,
@@ -659,8 +686,66 @@ func funcMap() template.FuncMap {
 		"gte":            func(a, b float64) bool { return a >= b },
 		"mul100":         func(f float64) float64 { return f * 100 },
 		"mul512":         func(f float64) float64 { return f * 512 },
+		"add":            func(a, b float64) float64 { return a + b },
+		"sub":            func(a, b float64) float64 { return a - b },
+		"percent": func(part, total float64) float64 {
+			if total <= 0 {
+				return 0
+			}
+			return part / total
+		},
+		"memUsed": func(s *model.SystemInfo) float64 { return s.MemTotal - s.MemAvailable },
 		"join":           strings.Join,
 		"dict":           dict,
+	}
+}
+
+// fmtRate renders a bytes-per-second rate with IEC units.
+func fmtRate(bps float64) string {
+	return model.HumanBytes(bps) + "/s"
+}
+
+// fmtUptime renders seconds as "12d 4h" / "4h 23m" / "23m".
+func fmtUptime(secs float64) string {
+	total := int(secs)
+	days := total / 86400
+	hrs := (total % 86400) / 3600
+	mins := (total % 3600) / 60
+	switch {
+	case days > 0:
+		return fmt.Sprintf("%dd %dh", days, hrs)
+	case hrs > 0:
+		return fmt.Sprintf("%dh %dm", hrs, mins)
+	default:
+		return fmt.Sprintf("%dm", mins)
+	}
+}
+
+// loadClass colors a load average relative to core count.
+func loadClass(load float64, cores int) string {
+	if cores <= 0 {
+		return ""
+	}
+	ratio := load / float64(cores)
+	switch {
+	case ratio >= 1.0:
+		return "bad"
+	case ratio >= 0.7:
+		return "warn"
+	default:
+		return "ok"
+	}
+}
+
+// pctClass colors a usage percentage with the standard thresholds.
+func pctClass(pct float64) string {
+	switch {
+	case pct >= 90:
+		return "bad"
+	case pct >= 75:
+		return "warn"
+	default:
+		return ""
 	}
 }
 

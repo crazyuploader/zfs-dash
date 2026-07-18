@@ -1,0 +1,381 @@
+{{define "title"}}ZFS Dashboard — System{{end}}
+
+{{define "body-attrs"}} data-reload-on-refresh{{end}}
+
+{{define "styles"}}
+<style>
+.main {
+  padding: var(--space-5) var(--space-4) var(--space-8);
+  max-width: 1400px; margin-inline: auto; width: 100%;
+}
+@media (min-width: 640px) {
+  .main { padding: var(--space-6) var(--space-6) var(--space-8); }
+}
+
+.page-header { margin-bottom: var(--space-5); }
+.page-title {
+  font-size: var(--text-xl); font-weight: 600;
+  letter-spacing: -0.025em; line-height: 1.1;
+}
+.page-sub {
+  font-size: var(--text-xs); color: var(--text-muted);
+  margin-top: var(--space-1); font-family: var(--font-mono);
+  overflow-wrap: break-word;
+}
+
+/* ── Node card ── */
+.sys-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-xl); padding: var(--space-4);
+  margin-bottom: var(--space-5);
+  transition: border-color var(--transition);
+}
+@media (min-width: 480px) { .sys-card { padding: var(--space-5); } }
+.sys-card:hover { border-color: var(--border-hi); }
+.sys-card.sys-card-error {
+  border-color: color-mix(in oklab, var(--error) 28%, transparent);
+}
+
+.sys-head {
+  display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;
+  padding-bottom: var(--space-3); margin-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+.sys-hostname { font-size: var(--text-base); font-weight: 600; letter-spacing: -0.01em; }
+.sys-location {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 8px; border-radius: var(--radius-full);
+  background: color-mix(in oklab, var(--primary) 14%, transparent);
+  border: 1px solid color-mix(in oklab, var(--primary) 24%, transparent);
+  color: var(--primary); font-size: 0.62rem; font-weight: 700;
+  letter-spacing: 0.04em; text-transform: uppercase;
+}
+.sys-location::before {
+  content: ""; width: 5px; height: 5px; border-radius: 50%;
+  background: currentColor; opacity: 0.9;
+}
+.sys-head-spacer { flex: 1; }
+.sys-badges { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.sys-badge {
+  font-size: 0.60rem; font-family: var(--font-mono); font-weight: 500;
+  padding: 1px 6px; border-radius: var(--radius-sm);
+  background: var(--surface-3); color: var(--text-muted);
+  border: 1px solid var(--border);
+  white-space: nowrap; line-height: 1.6;
+}
+
+.sys-err {
+  display: flex; align-items: flex-start; gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--error-dim);
+  border: 1px solid color-mix(in oklab, var(--error) 22%, transparent);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs); color: var(--error); font-family: var(--font-mono);
+}
+
+/* ── Metric blocks grid ── */
+.sys-grid {
+  display: grid; grid-template-columns: 1fr; gap: var(--space-3);
+}
+@media (min-width: 640px)  { .sys-grid { grid-template-columns: repeat(2, minmax(0,1fr)); gap: var(--space-4); } }
+@media (min-width: 1000px) { .sys-grid { grid-template-columns: repeat(3, minmax(0,1fr)); } }
+
+.sys-block {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: var(--space-4);
+  display: flex; flex-direction: column; gap: var(--space-3);
+  min-width: 0;
+}
+.sys-block-label {
+  font-size: 0.62rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+/* big value + bar */
+.sys-big {
+  font-size: var(--text-xl); font-weight: 700; line-height: 1;
+  font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+}
+.sys-big.ok   { color: var(--success); }
+.sys-big.warn { color: var(--warning); }
+.sys-big.bad  { color: var(--error); }
+.sys-big-sub { font-size: var(--text-xs); color: var(--text-muted); font-family: var(--font-mono); }
+.sys-dim { color: var(--text-faint); }
+
+.sys-chips { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+
+/* key/value rows (filesystems, network) */
+.sys-rows { display: flex; flex-direction: column; gap: var(--space-2); }
+.sys-row {
+  display: flex; align-items: baseline; gap: var(--space-2);
+  font-size: var(--text-xs); font-family: var(--font-mono);
+}
+.sys-row-name {
+  color: var(--text); min-width: 0; flex: 1;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sys-row-val { color: var(--text-muted); white-space: nowrap; }
+.sys-row-val b { color: var(--text); font-weight: 600; }
+.fs-row { display: flex; flex-direction: column; gap: 4px; }
+.fs-row-top { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-2); font-size: var(--text-xs); font-family: var(--font-mono); }
+.fs-mount { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.fs-pct { color: var(--text-muted); white-space: nowrap; font-weight: 600; }
+.fs-sub { font-size: 0.62rem; color: var(--text-faint); font-family: var(--font-mono); }
+
+/* temperature chips */
+.temp-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 0.65rem; font-family: var(--font-mono);
+  padding: 3px var(--space-2); border-radius: var(--radius-sm);
+  background: var(--surface-3); color: var(--text-muted);
+  white-space: nowrap;
+}
+.temp-chip b { font-weight: 700; }
+.temp-chip.cool b { color: var(--success); }
+.temp-chip.warm b { color: var(--warning); }
+.temp-chip.hot  b { color: var(--error); }
+</style>
+{{end}}
+
+{{define "content"}}
+<main class="main">
+
+  <div class="page-header animate-in">
+    <h1 class="page-title">System Overview</h1>
+    <p class="page-sub">{{.TotalNodes}} node{{if gt .TotalNodes 1}}s{{end}} &middot; {{.TotalCores}} cores &middot; {{.Unreachable}} unreachable &middot; fetched {{.FetchedAt}}</p>
+  </div>
+
+  {{if not .Nodes}}
+  <div class="empty animate-in">
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+      <rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/>
+      <path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/>
+    </svg>
+    <h3>No node_exporter endpoints configured</h3>
+    <p>Add <code>node_exporter_url</code> to an endpoint in config.yaml to see CPU, memory, and system metrics here.</p>
+  </div>
+  {{else}}
+
+  <!-- Fleet KPIs -->
+  <div class="kpi-row animate-in animate-in-delayed-1" role="region" aria-label="Fleet system summary">
+    <div class="kpi">
+      <div class="kpi-label">Nodes</div>
+      <div class="kpi-val neutral">{{.TotalNodes}}</div>
+      <div class="kpi-hint">with node_exporter</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Cores</div>
+      <div class="kpi-val neutral">{{.TotalCores}}</div>
+      <div class="kpi-hint">total</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Avg CPU</div>
+      <div class="kpi-val {{if .HasCPU}}{{if pctClass .AvgCPUPct}}{{pctClass .AvgCPUPct}}{{else}}ok{{end}}{{else}}neutral{{end}}">{{if .HasCPU}}{{printf "%.0f%%" .AvgCPUPct}}{{else}}&mdash;{{end}}</div>
+      <div class="kpi-hint">busy</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Memory</div>
+      <div class="kpi-val neutral">{{if gt .MemTotal 0.0}}{{printf "%.0f%%" (mul100 (percent .MemUsedBytes .MemTotal))}}{{else}}&mdash;{{end}}</div>
+      <div class="kpi-hint">{{humanBytes .MemUsedBytes}} / {{humanBytes .MemTotal}}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Hottest</div>
+      <div class="kpi-val {{if gt .MaxTempC 0.0}}{{if gt .MaxTempC 55.0}}bad{{else if gt .MaxTempC 45.0}}warn{{else}}ok{{end}}{{else}}neutral{{end}}">{{if gt .MaxTempC 0.0}}{{printf "%.0f" .MaxTempC}}&deg;C{{else}}&mdash;{{end}}</div>
+      <div class="kpi-hint">sensor</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Unreachable</div>
+      <div class="kpi-val {{if gt .Unreachable 0}}bad{{else}}neutral{{end}}">{{.Unreachable}}</div>
+      <div class="kpi-hint">exporters down</div>
+    </div>
+  </div>
+
+  {{range $i, $node := .Nodes}}
+  <section class="sys-card {{if $node.Error}}sys-card-error{{end}} animate-in {{if eq $i 0}}animate-in-delayed-2{{else if eq $i 1}}animate-in-delayed-3{{else}}animate-in-delayed-4{{end}}" aria-label="System {{$node.Label}}">
+
+    <div class="sys-head">
+      <div class="sys-hostname">{{if and $node.System $node.System.Hostname}}{{$node.System.Hostname}}{{else}}{{$node.Label}}{{end}}</div>
+      {{if $node.Location}}<div class="sys-location">{{$node.Location}}</div>{{end}}
+      <div class="sys-head-spacer"></div>
+      {{with $node.System}}
+      <div class="sys-badges">
+        {{if .OSPretty}}<span class="sys-badge">{{.OSPretty}}</span>{{end}}
+        {{if .Kernel}}<span class="sys-badge">{{.Kernel}}</span>{{end}}
+        {{if gt .UptimeSecs 0.0}}<span class="sys-badge">up {{fmtUptime .UptimeSecs}}</span>{{end}}
+        {{if .ExporterVersion}}<span class="sys-badge">node-exporter {{.ExporterVersion}}</span>{{end}}
+      </div>
+      {{end}}
+    </div>
+
+    {{if $node.Error}}
+    <div class="sys-err">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      <span>{{$node.Error}}</span>
+    </div>
+    {{else}}{{with $node.System}}
+    <div class="sys-grid">
+
+      <!-- CPU -->
+      <div class="sys-block">
+        <div class="sys-block-label">CPU</div>
+        {{if .HasCPURates}}
+        <div>
+          <span class="sys-big {{if pctClass .CPUBusyPct}}{{pctClass .CPUBusyPct}}{{else}}ok{{end}}">{{printf "%.0f%%" .CPUBusyPct}}</span>
+          <span class="sys-big-sub">busy &middot; {{.Cores}} cores</span>
+        </div>
+        <div class="bar-track" role="progressbar" aria-valuenow="{{printf "%.0f" .CPUBusyPct}}" aria-valuemin="0" aria-valuemax="100" aria-label="CPU {{printf "%.0f" .CPUBusyPct}}% busy">
+          <div class="bar-fill{{if pctClass .CPUBusyPct}} {{pctClass .CPUBusyPct}}{{end}}" data-width="{{printf "%.2f" .CPUBusyPct}}" style="width:0%"></div>
+        </div>
+        <div class="sys-chips">
+          <span class="chip{{if gte .CPUIOWaitPct 20.0}} hot{{else if gte .CPUIOWaitPct 10.0}} warm{{end}}">iowait {{printf "%.1f%%" .CPUIOWaitPct}}</span>
+          {{if .HasPressureRates}}
+          <span class="chip{{if gte .PressureCPUPct 40.0}} hot{{else if gte .PressureCPUPct 15.0}} warm{{end}}">stall cpu {{printf "%.1f%%" .PressureCPUPct}}</span>
+          <span class="chip{{if gte .PressureIOPct 40.0}} hot{{else if gte .PressureIOPct 15.0}} warm{{end}}">stall io {{printf "%.1f%%" .PressureIOPct}}</span>
+          <span class="chip{{if gte .PressureMemPct 20.0}} hot{{else if gte .PressureMemPct 5.0}} warm{{end}}">stall mem {{printf "%.1f%%" .PressureMemPct}}</span>
+          {{end}}
+        </div>
+        {{else}}
+        <div>
+          <span class="sys-big sys-dim">&mdash;</span>
+          <span class="sys-big-sub">{{.Cores}} cores &middot; rates warming up</span>
+        </div>
+        {{end}}
+      </div>
+
+      <!-- Memory -->
+      <div class="sys-block">
+        <div class="sys-block-label">Memory</div>
+        <div>
+          <span class="sys-big {{if pctClass .MemUsedPct}}{{pctClass .MemUsedPct}}{{else}}ok{{end}}">{{printf "%.0f%%" .MemUsedPct}}</span>
+          <span class="sys-big-sub">{{humanBytes (memUsed .)}} / {{humanBytes .MemTotal}}</span>
+        </div>
+        <div class="bar-track" role="progressbar" aria-valuenow="{{printf "%.0f" .MemUsedPct}}" aria-valuemin="0" aria-valuemax="100" aria-label="Memory {{printf "%.0f" .MemUsedPct}}% used">
+          <div class="bar-fill{{if pctClass .MemUsedPct}} {{pctClass .MemUsedPct}}{{end}}" data-width="{{printf "%.2f" .MemUsedPct}}" style="width:0%"></div>
+        </div>
+        <div class="sys-chips">
+          <span class="chip">buf/cache {{humanBytes (add .Buffers .Cached)}}</span>
+          {{if gt .SwapTotal 0.0}}
+          {{$swapUsed := sub .SwapTotal .SwapFree}}
+          <span class="chip{{if gte (percent $swapUsed .SwapTotal) 0.5}} hot{{else if gt $swapUsed 0.0}} warm{{end}}">swap {{humanBytes $swapUsed}} / {{humanBytes .SwapTotal}}</span>
+          {{end}}
+        </div>
+      </div>
+
+      <!-- Load -->
+      <div class="sys-block">
+        <div class="sys-block-label">Load Average</div>
+        <div>
+          <span class="sys-big {{with loadClass .Load1 .Cores}}{{.}}{{end}}">{{printf "%.2f" .Load1}}</span>
+          <span class="sys-big-sub">1 min &middot; {{.Cores}} cores</span>
+        </div>
+        <div class="sys-chips">
+          <span class="chip{{if eq (loadClass .Load5 .Cores) "bad"}} hot{{else if eq (loadClass .Load5 .Cores) "warn"}} warm{{end}}">5m {{printf "%.2f" .Load5}}</span>
+          <span class="chip{{if eq (loadClass .Load15 .Cores) "bad"}} hot{{else if eq (loadClass .Load15 .Cores) "warn"}} warm{{end}}">15m {{printf "%.2f" .Load15}}</span>
+        </div>
+      </div>
+
+      <!-- Filesystems -->
+      {{if .Filesystems}}
+      <div class="sys-block">
+        <div class="sys-block-label">Filesystems</div>
+        <div class="sys-rows">
+          {{range .Filesystems}}
+          <div class="fs-row">
+            <div class="fs-row-top">
+              <span class="fs-mount" title="{{.Device}}">{{.Mountpoint}}</span>
+              <span class="fs-pct">{{printf "%.0f%%" .UsedPct}}</span>
+            </div>
+            <div class="bar-track" role="progressbar" aria-valuenow="{{printf "%.0f" .UsedPct}}" aria-valuemin="0" aria-valuemax="100" aria-label="{{.Mountpoint}} {{printf "%.0f" .UsedPct}}% used">
+              <div class="bar-fill{{if pctClass .UsedPct}} {{pctClass .UsedPct}}{{end}}" data-width="{{printf "%.2f" .UsedPct}}" style="width:0%"></div>
+            </div>
+            <div class="fs-sub">{{.FSType}} &middot; {{humanBytes .AvailBytes}} free of {{humanBytes .SizeBytes}}</div>
+          </div>
+          {{end}}
+        </div>
+      </div>
+      {{end}}
+
+      <!-- Network -->
+      {{if .Nets}}
+      <div class="sys-block">
+        <div class="sys-block-label">Network</div>
+        <div class="sys-rows">
+          {{range .Nets}}
+          <div class="sys-row">
+            <span class="sys-row-name">{{.Name}}</span>
+            {{if .HasRates}}
+            <span class="sys-row-val">&darr;&nbsp;<b>{{fmtRate .RxBps}}</b></span>
+            <span class="sys-row-val">&uarr;&nbsp;<b>{{fmtRate .TxBps}}</b></span>
+            {{else}}
+            <span class="sys-row-val sys-dim">rates warming up</span>
+            {{end}}
+          </div>
+          {{end}}
+        </div>
+      </div>
+      {{end}}
+
+      <!-- Temperatures -->
+      {{if .Temps}}
+      <div class="sys-block">
+        <div class="sys-block-label">Temperatures</div>
+        <div class="sys-chips">
+          {{range .Temps}}
+          <span class="temp-chip {{tempClass .Celsius}}" title="{{.Chip}}">{{.Chip}}: {{.Label}} <b>{{printf "%.0f" .Celsius}}&deg;C</b></span>
+          {{end}}
+        </div>
+      </div>
+      {{end}}
+
+    </div>
+    {{end}}{{end}}
+
+  </section>
+  {{end}}
+
+  {{end}}
+
+</main>
+
+<!-- auto-refresh progress bar -->
+<div id="rbar" aria-hidden="true"></div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+(function () {
+  'use strict';
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* Animate bars */
+  const fills = document.querySelectorAll('.bar-fill[data-width]');
+  if (!prefersReducedMotion) {
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        fills.forEach(function (el) { el.style.width = el.getAttribute('data-width') + '%'; });
+      });
+    });
+  } else {
+    fills.forEach(function (el) { el.style.width = el.getAttribute('data-width') + '%'; });
+  }
+
+  /* Refresh progress bar */
+  const REFRESH_MS = {{.RefreshSecs}} * 1000;
+  const rbar = document.getElementById('rbar');
+  const startAt = Date.now();
+  function tickBar() {
+    const pct = Math.min((Date.now() - startAt) / REFRESH_MS * 100, 100);
+    if (rbar) rbar.style.width = pct + '%';
+    if (pct < 100) requestAnimationFrame(tickBar);
+  }
+  requestAnimationFrame(tickBar);
+
+  /* Restore scroll after reload (no collapsibles on this page) */
+  if (window.zfsdashRestore) window.zfsdashRestore(null);
+})();
+</script>
+{{end}}

@@ -18,6 +18,7 @@ var fs embed.FS
 var pageFiles = map[string]string{
 	"dashboard": "pages/dashboard.html",
 	"history":   "pages/history.html",
+	"system":    "pages/system.html",
 }
 
 // Pages parses one template set per page; every set shares base.html and the

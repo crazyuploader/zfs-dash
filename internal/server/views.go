@@ -77,6 +77,58 @@ type systemView struct {
 	System    *model.SystemInfo `json:"system,omitempty"`
 }
 
+// systemPageData is the data passed to the system page template.
+type systemPageData struct {
+	pageData
+	Nodes     []systemView
+	FetchedAt string
+
+	// Fleet KPI aggregates
+	TotalNodes   int
+	Unreachable  int
+	TotalCores   int
+	AvgCPUPct    float64
+	HasCPU       bool
+	MemUsedBytes float64
+	MemTotal     float64
+	MaxTempC     float64
+}
+
+// buildSystemPageData aggregates fleet KPIs over the system views.
+func buildSystemPageData(views []systemView) systemPageData {
+	d := systemPageData{
+		Nodes:      views,
+		FetchedAt:  time.Now().Format("15:04:05"),
+		TotalNodes: len(views),
+	}
+	var cpuSum float64
+	var cpuN int
+	for _, v := range views {
+		if v.System == nil {
+			d.Unreachable++
+			continue
+		}
+		s := v.System
+		d.TotalCores += s.Cores
+		d.MemTotal += s.MemTotal
+		d.MemUsedBytes += s.MemTotal - s.MemAvailable
+		if s.HasCPURates {
+			cpuSum += s.CPUBusyPct
+			cpuN++
+		}
+		for _, t := range s.Temps {
+			if t.Celsius > d.MaxTempC {
+				d.MaxTempC = t.Celsius
+			}
+		}
+	}
+	if cpuN > 0 {
+		d.AvgCPUPct = cpuSum / float64(cpuN)
+		d.HasCPU = true
+	}
+	return d
+}
+
 // systemViews returns view rows for nodes that have system data (or where a
 // node_exporter is configured but returned nothing, so the UI can show an
 // error card).
