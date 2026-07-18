@@ -1089,8 +1089,7 @@ button:focus-visible,
           {{if $node.Location}}<div class="node-location">{{$node.Location}}</div>{{end}}
         </div>
         <div class="node-url-row">
-          <div class="node-url">{{$node.URL}}</div>
-          <div class="node-ts" aria-label="Fetched at">{{fmtNodeTime $node.FetchedAt}}</div>
+          <div class="node-ts" aria-label="Fetched at">fetched {{fmtNodeTime $node.FetchedAt}}</div>
         </div>
         {{if or $node.ExporterInfo.Version $node.SmartctlInfo.ExporterVersion}}<div class="node-exporter">
           {{if $node.ExporterInfo.Version}}<span class="node-exporter-badge">zfs-exporter {{$node.ExporterInfo.Version}}</span>{{end}}

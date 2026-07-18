@@ -61,11 +61,13 @@ func (f *Fetcher) CacheInfo() (expiresAt time.Time, ttl time.Duration) {
 
 // FetchAll fetches all endpoints concurrently and returns results in the same order.
 // It returns the results and a boolean indicating if the results were from cache.
+// Results share inner slices with the cache and must be treated as read-only.
 func (f *Fetcher) FetchAll(ctx context.Context) ([]model.NodeData, bool) {
 	f.mu.RLock()
 	if time.Now().Before(f.expiresAt) {
 		slog.Debug("cache HIT", "expires_in", time.Until(f.expiresAt).Round(time.Second))
-		// Return a copy so callers cannot mutate cached data.
+		// Shallow copy: inner slices (Pools, Disks, Datasets) are shared with
+		// the cache — callers must treat results as read-only.
 		data := append([]model.NodeData{}, f.cache...)
 		f.mu.RUnlock()
 		return data, true
@@ -78,7 +80,7 @@ func (f *Fetcher) FetchAll(ctx context.Context) ([]model.NodeData, bool) {
 
 	// Re-check after acquiring write lock
 	if time.Now().Before(f.expiresAt) {
-		// Return a copy so callers cannot mutate cached data.
+		// Shallow copy; results are read-only (see above).
 		return append([]model.NodeData{}, f.cache...), true
 	}
 
@@ -96,7 +98,7 @@ func (f *Fetcher) FetchAll(ctx context.Context) ([]model.NodeData, bool) {
 
 	f.cache = results
 	f.expiresAt = time.Now().Add(f.cacheTTL)
-	// Return a copy so callers cannot mutate cached data.
+	// Shallow copy; results are read-only (see above).
 	return append([]model.NodeData{}, results...), false
 }
 

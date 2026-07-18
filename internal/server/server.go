@@ -28,14 +28,35 @@ import (
 	"github.com/gofiber/fiber/v3/middleware/logger"
 )
 
+// maxSSEClients caps concurrent /events connections to avoid fd exhaustion.
+const maxSSEClients = 64
+
 // Hub broadcasts reload signals to connected SSE clients.
 // clients is a sync.Map keyed by chan bool.
 type Hub struct {
 	clients sync.Map
+	count   atomic.Int64
 }
 
 func newHub() *Hub {
 	return &Hub{}
+}
+
+// add registers a client channel; returns false when the hub is full.
+func (h *Hub) add(ch chan bool) bool {
+	if h.count.Load() >= maxSSEClients {
+		return false
+	}
+	h.clients.Store(ch, true)
+	h.count.Add(1)
+	return true
+}
+
+// remove unregisters a client channel; safe to call more than once.
+func (h *Hub) remove(ch chan bool) {
+	if _, loaded := h.clients.LoadAndDelete(ch); loaded {
+		h.count.Add(-1)
+	}
 }
 
 func (h *Hub) broadcast() {
@@ -44,7 +65,7 @@ func (h *Hub) broadcast() {
 		select {
 		case ch <- true:
 		default:
-			h.clients.Delete(ch)
+			h.remove(ch)
 		}
 		return true
 	})
@@ -55,17 +76,6 @@ const (
 	httpIdleTimeout    = 60 * time.Second
 	httpHandlerTimeout = 15 * time.Second
 )
-
-// nodeView is the subset of NodeData serialized into the page's inline JS.
-// URL is intentionally excluded to avoid exposing internal scrape endpoints to browsers.
-type nodeView struct {
-	Label        string             `json:"label"`
-	Location     string             `json:"location,omitempty"`
-	ExporterInfo model.ExporterInfo `json:"exporter_info,omitempty"`
-	SmartctlInfo model.SmartctlInfo `json:"smartctl_info,omitempty"`
-	Pools        []model.Pool       `json:"pools"`
-	Disks        []model.DiskInfo   `json:"disks,omitempty"`
-}
 
 // templateData is the data passed to the HTML template.
 type templateData struct {
@@ -216,18 +226,30 @@ func newFiberApp(cfg *config.Config) *fiber.App {
 }
 
 func registerSSERoute(app *fiber.App, hub *Hub) {
-	app.Get("/events", func(c fiber.Ctx) error {
+	// Long-lived connections get their own, stricter limiter; the real
+	// resource to protect is concurrent connections, capped via hub.add.
+	sseLimiter := limiter.New(limiter.Config{
+		Max:        10,
+		Expiration: 1 * time.Minute,
+	})
+	app.Get("/events", sseLimiter, func(c fiber.Ctx) error {
+		notify := make(chan bool, 1)
+		if !hub.add(notify) {
+			slog.Warn("SSE client rejected: connection cap reached", "cap", maxSSEClients)
+			return fiber.ErrServiceUnavailable
+		}
+
 		c.Set("Content-Type", "text/event-stream")
 		c.Set("Cache-Control", "no-cache")
 		c.Set("Connection", "keep-alive")
 		c.Set("Transfer-Encoding", "chunked")
 
-		notify := make(chan bool, 1)
-		hub.clients.Store(notify, true)
-		defer hub.clients.Delete(notify)
-
 		clientIP := c.IP()
 		c.Response().SetBodyStreamWriter(func(w *bufio.Writer) {
+			// The handler has already returned by the time this runs, so the
+			// client must be unregistered here, not via defer in the handler
+			// (which would remove it before the stream even starts).
+			defer hub.remove(notify)
 			slog.Debug("SSE client connected", "ip", clientIP)
 
 			// Send initial keep-alive
@@ -270,7 +292,7 @@ func registerAPIRoutes(app *fiber.App, f *fetcher.Fetcher, hub *Hub, rl fiber.Ha
 			hub.broadcast()
 		}
 		setCacheHeaders(c, f, isCached)
-		return c.JSON(nodes)
+		return c.JSON(nodeViews(nodes))
 	})
 
 	app.Get("/api/health/:label", rl, func(c fiber.Ctx) error {
@@ -357,6 +379,9 @@ func registerHistoryRoutes(app *fiber.App, rl fiber.Handler, histStore *history.
 		if fromUnix > 0 {
 			from = time.Unix(fromUnix, 0)
 		}
+		if from.After(to) {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "from must be before to"})
+		}
 
 		points, err := histStore.Query(key, from, to, bucketSecs)
 		if err != nil {
@@ -391,6 +416,9 @@ func parseHistoryQueryParams(c fiber.Ctx) (fromUnix, toUnix, bucketSecs int64, e
 	if fromUnix < 0 || toUnix < 0 {
 		return 0, 0, 0, fmt.Errorf("timestamps must be non-negative")
 	}
+	if bucketSecs < 0 {
+		return 0, 0, 0, fmt.Errorf("bucket must be non-negative")
+	}
 	return fromUnix, toUnix, bucketSecs, nil
 }
 
@@ -421,11 +449,12 @@ func setupLogger(cfg *config.Config) {
 }
 
 func buildTemplateData(nodes []model.NodeData, cfg *config.Config) templateData {
-	views := make([]nodeView, len(nodes))
-	for i, n := range nodes {
-		views[i] = nodeView{Label: n.Label, Location: n.Location, ExporterInfo: n.ExporterInfo, SmartctlInfo: n.SmartctlInfo, Pools: n.Pools, Disks: n.Disks}
+	// Node structs are copies (FetchAll returns a fresh outer slice), so
+	// sanitizing Error in place does not touch the fetcher cache.
+	for i := range nodes {
+		nodes[i].Error = sanitizeError(nodes[i].Error, nodes[i].URL)
 	}
-	nodesJSON, _ := json.Marshal(views)
+	nodesJSON, _ := json.Marshal(nodeViews(nodes))
 
 	d := templateData{
 		Nodes:       nodes,
