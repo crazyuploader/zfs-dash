@@ -194,11 +194,12 @@
   <section class="sys-card {{if $node.Error}}sys-card-error{{end}} animate-in {{if eq $i 0}}animate-in-delayed-2{{else if eq $i 1}}animate-in-delayed-3{{else}}animate-in-delayed-4{{end}}" aria-label="System {{$node.Label}}">
 
     <div class="sys-head">
-      <div class="sys-hostname">{{if and $node.System $node.System.Hostname}}{{$node.System.Hostname}}{{else}}{{$node.Label}}{{end}}</div>
+      <div class="sys-hostname">{{$node.Label}}</div>
       {{if $node.Location}}<div class="sys-location">{{$node.Location}}</div>{{end}}
       <div class="sys-head-spacer"></div>
       {{with $node.System}}
       <div class="sys-badges">
+        {{if and .Hostname (ne .Hostname $node.Label)}}<span class="sys-badge">host: {{.Hostname}}</span>{{end}}
         {{if .OSPretty}}<span class="sys-badge">{{.OSPretty}}</span>{{end}}
         {{if .Kernel}}<span class="sys-badge">{{.Kernel}}</span>{{end}}
         {{if gt .UptimeSecs 0.0}}<span class="sys-badge">up {{fmtUptime .UptimeSecs}}</span>{{end}}
