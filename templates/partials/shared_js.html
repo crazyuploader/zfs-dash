@@ -1,0 +1,65 @@
+{{define "shared_js"}}
+<script>
+(function () {
+  'use strict';
+
+  /* ── Theme toggle (shared) ── */
+  var html = document.documentElement;
+  var themeBtn = document.querySelector('[data-theme-toggle]');
+  var themeKey = 'zfs-dash-theme';
+  var theme;
+  try { theme = localStorage.getItem(themeKey); } catch (_) { theme = null; }
+  if (theme !== 'dark' && theme !== 'light') {
+    theme = window.matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light';
+  }
+
+  var moonSVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+  var sunSVG  = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>';
+
+  function applyTheme(t) {
+    html.setAttribute('data-theme', t);
+    html.style.colorScheme = t;
+    if (themeBtn) {
+      themeBtn.innerHTML = t === 'dark' ? moonSVG : sunSVG;
+      themeBtn.setAttribute('aria-label', 'Switch to ' + (t === 'dark' ? 'light' : 'dark') + ' mode');
+    }
+    document.dispatchEvent(new CustomEvent('zfsdash:theme', { detail: t }));
+  }
+  applyTheme(theme);
+  if (themeBtn) {
+    themeBtn.addEventListener('click', function () {
+      theme = theme === 'dark' ? 'light' : 'dark';
+      try { localStorage.setItem(themeKey, theme); } catch (_) {}
+      applyTheme(theme);
+    });
+  }
+
+  /* ── Live clock in topbar ── */
+  var tsEl = document.getElementById('ts');
+  function tickClock() {
+    if (!tsEl) return;
+    tsEl.textContent = new Date().toLocaleTimeString([], {
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+    });
+  }
+  tickClock();
+  setInterval(tickClock, 1000);
+
+  /* ── Shared helpers ── */
+  window.fmtBytes = function (value) {
+    var units = ['B','KiB','MiB','GiB','TiB','PiB','EiB'];
+    var n = Number(value) || 0;
+    if (n < 1024) return Math.round(n) + ' B';
+    var exp = 0;
+    while (n >= 1024 && exp < units.length - 1) { n /= 1024; exp++; }
+    return n.toFixed(2) + ' ' + units[exp];
+  };
+
+  window.esc = function (v) {
+    return String(v)
+      .replaceAll('&','&amp;').replaceAll('<','&lt;')
+      .replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
+  };
+})();
+</script>
+{{end}}

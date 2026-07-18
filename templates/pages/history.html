@@ -1,68 +1,8 @@
-package templates
+{{define "title"}}ZFS Dashboard — History{{end}}
 
-const historyHTML = `<!DOCTYPE html>
-<html lang="en" data-theme="dark">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="color-scheme" content="dark light">
-<title>ZFS Dashboard — History</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cellipse cx='16' cy='9' rx='12' ry='4' fill='%234f8ef7'/%3E%3Cpath d='M4 9v7c0 2.21 5.37 4 12 4s12-1.79 12-4V9c0 2.21-5.37 4-12 4S4 11.21 4 9z' fill='%233a7bd5'/%3E%3Cpath d='M4 16v7c0 2.21 5.37 4 12 4s12-1.79 12-4v-7c0 2.21-5.37 4-12 4S4 18.21 4 16z' fill='%232563b0'/%3E%3C/svg%3E">
+{{define "styles"}}
 <style>
-:root {
-  --font-body: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-mono: 'DM Mono', 'JetBrains Mono', ui-monospace, monospace;
-  --text-sm: clamp(0.82rem, 0.78rem + 0.2vw, 0.9rem);
-  --text-base: clamp(0.9rem, 0.85rem + 0.25vw, 1rem);
-  --text-lg: clamp(1.05rem, 0.95rem + 0.5vw, 1.35rem);
-  --space-2:0.5rem; --space-3:0.75rem; --space-4:1rem; --space-6:1.5rem; --space-8:2rem;
-  --radius-md:0.5rem; --radius-lg:0.75rem; --radius-full:9999px;
-  --transition: 180ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-:root, [data-theme="dark"] {
-  --bg: #0d0d0f; --surface: #131316; --surface-2: #18181c; --surface-3: #1e1e24;
-  --border: rgba(255,255,255,0.07); --border-hi: rgba(255,255,255,0.13);
-  --text: #e8e8ea; --text-muted: #85858f; --text-faint: #44444d;
-  --primary: #4f98a3; --primary-dim: rgba(79,152,163,0.14);
-  --success: #6daa45; --warning: #e8af34; --error: #dd6974;
-  --shadow-md: 0 4px 20px rgba(0,0,0,0.45);
-}
-[data-theme="light"] {
-  --bg: #f2f2ee; --surface: #fafaf8; --surface-2: #ffffff; --surface-3: #ededea;
-  --border: rgba(0,0,0,0.07); --border-hi: rgba(0,0,0,0.13);
-  --text: #1a1a1f; --text-muted: #62626b; --text-faint: #aaaaaf;
-  --primary: #01696f; --primary-dim: rgba(1,105,111,0.1);
-  --success: #437a22; --warning: #9c6a00; --error: #a13544;
-  --shadow-md: 0 4px 20px rgba(0,0,0,0.09);
-}
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { -webkit-font-smoothing: antialiased; color-scheme: dark; }
-html[data-theme="light"] { color-scheme: light; }
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
-}
-body {
-  font-family: var(--font-body); font-size: var(--text-base);
-  background: var(--bg); color: var(--text);
-  min-height: 100dvh; display: flex; flex-direction: column;
-}
-
-/* ── Topbar ── */
-.topbar {
-  position: sticky; top: 0; z-index: 40;
-  display: flex; align-items: center; gap: var(--space-3);
-  padding: 0 var(--space-6); height: 52px;
-  background: rgba(13,13,15,0.85); backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border);
-}
-[data-theme="light"] .topbar { background: rgba(242,242,238,0.9); }
-.logo { display:flex; align-items:center; gap:var(--space-2); text-decoration:none; color:var(--text); font-weight:600; font-size:var(--text-base); }
-.logo-sub { font-weight:400; color:var(--text-muted); margin-left:0.3em; font-size:var(--text-sm); }
-.topbar-spacer { flex:1; }
-.back-link { display:flex; align-items:center; gap:var(--space-2); color:var(--text-muted); text-decoration:none; font-size:var(--text-sm); padding:0.35rem 0.75rem; border-radius:var(--radius-full); border:1px solid var(--border); transition:var(--transition); white-space:nowrap; }
-.back-link:hover { color:var(--text); border-color:var(--border-hi); }
-.icon-btn { display:flex; align-items:center; justify-content:center; width:36px; height:36px; border:1px solid var(--border); border-radius:var(--radius-md); background:transparent; color:var(--text-muted); cursor:pointer; transition:var(--transition); touch-action:manipulation; flex-shrink:0; }
-.icon-btn:hover { color:var(--text); border-color:var(--border-hi); }
+body { display: flex; flex-direction: column; height: 100dvh; }
 
 /* ── Mobile sidebar toggle ── */
 .sidebar-toggle {
@@ -166,7 +106,7 @@ canvas#chart { display:block; width:100%; }
 .legend-item span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; font-family:var(--font-mono); }
 .legend-line { width:16px; height:2px; border-radius:1px; flex-shrink:0; }
 
-/* ── Tooltip — FIXED ── */
+/* ── Tooltip ── */
 #chart-tooltip {
   position:fixed; pointer-events:none; z-index:100;
   background:var(--surface-3); border:1px solid var(--border-hi);
@@ -206,7 +146,6 @@ canvas#chart { display:block; width:100%; }
 
 /* ── Mobile ── */
 @media (max-width: 700px) {
-  .topbar { padding: 0 var(--space-4); }
   .layout { flex-direction:column; position:relative; }
   .sidebar {
     position: absolute; top: 0; left: 0; bottom: 0; z-index: 30;
@@ -225,38 +164,17 @@ canvas#chart { display:block; width:100%; }
   #chart-tooltip { width:190px; font-size:0.72rem; }
 }
 </style>
-</head>
-<body>
+{{end}}
 
-<header class="topbar">
-  <a class="logo" href="/" aria-label="ZFS Dash home">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-         stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <rect x="2" y="2"  width="20" height="6" rx="1.5"/>
-      <rect x="2" y="10" width="20" height="6" rx="1.5"/>
-      <rect x="2" y="18" width="20" height="4" rx="1.5"/>
-      <circle cx="5.5" cy="5"  r="0.9" fill="currentColor" stroke="none"/>
-      <circle cx="5.5" cy="13" r="0.9" fill="currentColor" stroke="none"/>
-      <circle cx="5.5" cy="20" r="0.9" fill="currentColor" stroke="none"/>
-    </svg>
-    <span class="logo-name">zfs-dash<span class="logo-sub">history</span></span>
-  </a>
-  <div class="topbar-spacer"></div>
-  <a class="back-link" href="/">
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <path d="m15 18-6-6 6-6"/>
-    </svg>
-    Dashboard
-  </a>
-  <button class="sidebar-toggle" id="sidebar-toggle-btn" aria-label="Toggle sidebar">
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
-    </svg>
-  </button>
-  <button class="icon-btn" id="theme-btn" aria-label="Toggle theme"></button>
-</header>
+{{define "topbar-extra"}}
+<button class="sidebar-toggle" id="sidebar-toggle-btn" aria-label="Toggle sidebar">
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+  </svg>
+</button>
+{{end}}
 
+{{define "content"}}
 <!-- Mobile overlay -->
 <div class="sidebar-overlay" id="sidebar-overlay"></div>
 
@@ -302,7 +220,9 @@ canvas#chart { display:block; width:100%; }
   <div class="tooltip-time" id="tt-time"></div>
   <div id="tt-rows"></div>
 </div>
+{{end}}
 
+{{define "scripts"}}
 <script>
 (function () {
   /* ── Mobile sidebar toggle ── */
@@ -317,27 +237,8 @@ canvas#chart { display:block; width:100%; }
     overlayEl.classList.remove('open');
   });
 
-  /* ── Theme ── */
-  const THEME_KEY = 'zfs-dash-theme';
-  const moonSVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
-  const sunSVG  = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
-  const themeBtn = document.getElementById('theme-btn');
-  let theme;
-  try { theme = localStorage.getItem(THEME_KEY); } catch(_) { theme = null; }
-  if (theme !== 'dark' && theme !== 'light') {
-    theme = window.matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light';
-  }
-  function applyTheme(t) {
-    document.documentElement.setAttribute('data-theme', t);
-    document.documentElement.style.colorScheme = t;
-    themeBtn.innerHTML = t === 'dark' ? moonSVG : sunSVG;
-    themeBtn.setAttribute('aria-label', 'Switch to ' + (t === 'dark' ? 'light' : 'dark') + ' mode');
-  }
-  applyTheme(theme);
-  themeBtn.addEventListener('click', () => {
-    theme = theme === 'dark' ? 'light' : 'dark';
-    try { localStorage.setItem(THEME_KEY, theme); } catch(_) {}
-    applyTheme(theme);
+  /* Re-render chart when the shared theme toggle fires */
+  document.addEventListener('zfsdash:theme', () => {
     if (activeSeries.length) renderChart();
   });
 
@@ -347,11 +248,6 @@ canvas#chart { display:block; width:100%; }
     used_pct: 'Usage %', alloc_bytes: 'Allocated', free_bytes: 'Free',
     temp_c: 'Temp °C', wear_pct: 'NVMe Wear %', wear_lvl: 'Wear Level',
     pow_hrs: 'Pwr-On Hrs',
-  };
-  // Short labels for tooltip value column
-  const METRIC_SHORT = {
-    used_pct: '%', wear_pct: '%', temp_c: '°C', pow_hrs: 'h',
-    alloc_bytes: '', free_bytes: '',
   };
 
   /* ── State ── */
@@ -434,7 +330,7 @@ canvas#chart { display:block; width:100%; }
           dt.type = 'button';
           dt.title = diskName;
           dt.innerHTML = chevronSVG +
-            '<span class="disk-name">' + escHtml(shortName) + '</span>';
+            '<span class="disk-name">' + esc(shortName) + '</span>';
           dt.addEventListener('click', () => dg.classList.toggle('open'));
           dg.appendChild(dt);
 
@@ -467,7 +363,7 @@ canvas#chart { display:block; width:100%; }
             const lbl = document.createElement('span');
             lbl.className = 'series-item-label';
             lbl.innerHTML = '<span class="series-item-metric">' +
-              escHtml(METRIC_LABELS[s.metric] || s.metric) + '</span>';
+              esc(METRIC_LABELS[s.metric] || s.metric) + '</span>';
 
             item.appendChild(cb);
             item.appendChild(dot);
@@ -658,7 +554,7 @@ canvas#chart { display:block; width:100%; }
       const li = document.createElement('div');
       li.className = 'legend-item';
       li.innerHTML = '<div class="legend-line" style="background:' + color + '"></div>' +
-        '<span>' + escHtml(shortName) + ' · ' + escHtml(METRIC_LABELS[s.info.metric] || s.info.metric) + '</span>';
+        '<span>' + esc(shortName) + ' · ' + esc(METRIC_LABELS[s.info.metric] || s.info.metric) + '</span>';
       legendEl.appendChild(li);
     }
 
@@ -694,8 +590,8 @@ canvas#chart { display:block; width:100%; }
       row.className = 'tooltip-row';
       row.innerHTML =
         '<span class="tooltip-dot" style="background:' + color + '"></span>' +
-        '<span class="tooltip-name">' + escHtml(shortName) + '</span>' +
-        '<span class="tooltip-val">' + escHtml(fmtValFull(nearest.v, s.info?.metric)) + '</span>';
+        '<span class="tooltip-name">' + esc(shortName) + '</span>' +
+        '<span class="tooltip-val">' + esc(fmtValFull(nearest.v, s.info?.metric)) + '</span>';
       ttRows.appendChild(row);
     }
 
@@ -744,12 +640,6 @@ canvas#chart { display:block; width:100%; }
     if (metric === 'pow_hrs') return v.toFixed(0) + 'h';
     return v.toFixed(2);
   }
-  function fmtBytes(b) {
-    const u = ['B','KB','MB','GB','TB','PB'];
-    let i = 0;
-    while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
-    return b.toFixed(1) + ' ' + u[i];
-  }
   function fmtTime(ts, hours) {
     const d = new Date(ts * 1000);
     if (hours <= 24) return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:false});
@@ -761,10 +651,6 @@ canvas#chart { display:block; width:100%; }
     return d.toLocaleDateString([], {month:'short', day:'numeric'}) + ' ' +
            d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false});
   }
-  function escHtml(s) {
-    if (s == null) return '';
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  }
 
   /* ── Resize ── */
   const ro = new ResizeObserver(() => { if (activeSeries.length) renderChart(); });
@@ -774,5 +660,4 @@ canvas#chart { display:block; width:100%; }
   loadSeries();
 })();
 </script>
-</body>
-</html>`
+{{end}}

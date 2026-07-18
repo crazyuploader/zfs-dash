@@ -77,11 +77,11 @@ const (
 	httpHandlerTimeout = 15 * time.Second
 )
 
-// templateData is the data passed to the HTML template.
+// templateData is the data passed to the dashboard page template.
 type templateData struct {
+	pageData
 	Nodes            []model.NodeData
 	NodesJSON        template.JS // URL-stripped JSON for inline script
-	RefreshSecs      int
 	FetchedAt        string
 	TotalPools       int
 	UnreachableNodes int
@@ -89,7 +89,12 @@ type templateData struct {
 	DegradedPools    int
 	ErroredPools     int
 	TotalNodes       int
-	HistoryEnabled   bool
+}
+
+// historyData is the data passed to the history page template.
+type historyData struct {
+	pageData
+	RetentionHours int
 }
 
 // Start registers routes and begins listening.
@@ -121,17 +126,9 @@ func Start(cfg *config.Config) error {
 		defer func() { _ = histStore.Close() }()
 	}
 
-	tmpl, err := template.New("dashboard").Funcs(funcMap()).Parse(templates.Dashboard)
+	pages, err := templates.Pages(funcMap())
 	if err != nil {
 		return fmt.Errorf("template parse: %w", err)
-	}
-
-	var histTmpl *template.Template
-	if histStore != nil {
-		histTmpl, err = template.New("history").Funcs(funcMap()).Parse(templates.History)
-		if err != nil {
-			return fmt.Errorf("history template parse: %w", err)
-		}
 	}
 
 	app := newFiberApp(cfg)
@@ -143,9 +140,9 @@ func Start(cfg *config.Config) error {
 
 	registerSSERoute(app, hub)
 	registerAPIRoutes(app, f, hub, rl, &cfgPtr)
-	registerDashboardRoute(app, f, hub, tmpl, &cfgPtr, histStore)
+	registerDashboardRoute(app, f, hub, pages["dashboard"], &cfgPtr, histStore)
 	if histStore != nil {
-		registerHistoryRoutes(app, rl, histStore, histTmpl, &cfgPtr)
+		registerHistoryRoutes(app, rl, histStore, pages["history"], &cfgPtr)
 	}
 
 	app.Get("/health", func(c fiber.Ctx) error {
@@ -316,13 +313,13 @@ func registerDashboardRoute(app *fiber.App, f *fetcher.Fetcher, hub *Hub, tmpl *
 		if !isCached {
 			hub.broadcast()
 		}
-		data := buildTemplateData(nodes, curCfg)
-		data.HistoryEnabled = histStore != nil
+		data := buildTemplateData(nodes)
+		data.pageData = newPageData("pools", curCfg, histStore != nil)
 
 		setCacheHeaders(c, f, isCached)
 		c.Set("Cache-Control", "no-store")
 		var buf bytes.Buffer
-		if err := tmpl.Execute(&buf, data); err != nil {
+		if err := tmpl.ExecuteTemplate(&buf, "base", data); err != nil {
 			slog.Error("template execution failed", "error", err)
 			return fiber.ErrInternalServerError
 		}
@@ -336,10 +333,11 @@ func registerHistoryRoutes(app *fiber.App, rl fiber.Handler, histStore *history.
 	app.Get("/history", func(c fiber.Ctx) error {
 		curCfg := cfgPtr.Load()
 		var buf bytes.Buffer
-		if err := histTmpl.Execute(&buf, map[string]any{
-			"RefreshSecs":    int(curCfg.Refresh.Seconds()),
-			"RetentionHours": int(histStore.Retention().Hours()),
-		}); err != nil {
+		data := historyData{
+			pageData:       newPageData("history", curCfg, true),
+			RetentionHours: int(histStore.Retention().Hours()),
+		}
+		if err := histTmpl.ExecuteTemplate(&buf, "base", data); err != nil {
 			slog.Error("history template execution failed", "error", err)
 			return fiber.ErrInternalServerError
 		}
@@ -448,7 +446,7 @@ func setupLogger(cfg *config.Config) {
 	slog.SetDefault(slog.New(handler))
 }
 
-func buildTemplateData(nodes []model.NodeData, cfg *config.Config) templateData {
+func buildTemplateData(nodes []model.NodeData) templateData {
 	// Node structs are copies (FetchAll returns a fresh outer slice), so
 	// sanitizing Error in place does not touch the fetcher cache.
 	for i := range nodes {
@@ -457,12 +455,11 @@ func buildTemplateData(nodes []model.NodeData, cfg *config.Config) templateData 
 	nodesJSON, _ := json.Marshal(nodeViews(nodes))
 
 	d := templateData{
-		Nodes:       nodes,
-		NodesJSON:   template.JS(nodesJSON), //nolint:gosec // skipcq: GSC-G203 -- json.Marshal output is safe for inline JS
-		RefreshSecs: int(cfg.Refresh.Seconds()),
-		FetchedAt:   time.Now().Format("15:04:05"),
-		TotalNodes:  len(nodes),
-		// HistoryEnabled is set by the caller after buildTemplateData returns.
+		Nodes:      nodes,
+		NodesJSON:  template.JS(nodesJSON), //nolint:gosec // skipcq: GSC-G203 -- json.Marshal output is safe for inline JS
+		FetchedAt:  time.Now().Format("15:04:05"),
+		TotalNodes: len(nodes),
+		// pageData is set by the caller after buildTemplateData returns.
 	}
 	for _, n := range nodes {
 		if n.Error != "" {
