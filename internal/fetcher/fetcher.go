@@ -85,21 +85,21 @@ func (f *Fetcher) FetchAll(ctx context.Context) ([]model.NodeData, bool) {
 	}
 	f.mu.RUnlock()
 
-	return f.refresh(ctx), false
+	return f.fetchAndStore(ctx), false
 }
 
 // Refresh fetches all endpoints unconditionally (bypassing the cache TTL)
 // and updates the cache. Used by the background poller so its cadence is
 // independent of cache_ttl. Results are read-only (see FetchAll).
 func (f *Fetcher) Refresh(ctx context.Context) []model.NodeData {
-	return f.refresh(ctx)
+	return f.fetchAndStore(ctx)
 }
 
-// refresh runs the concurrent fan-out WITHOUT holding f.mu during network
+// fetchAndStore runs the concurrent fan-out WITHOUT holding f.mu during network
 // I/O: it snapshots the endpoint list and generation under a read lock,
 // fetches unlocked, then publishes the results only if the endpoints have
 // not been swapped by SetEndpoints in the meantime.
-func (f *Fetcher) refresh(ctx context.Context) []model.NodeData {
+func (f *Fetcher) fetchAndStore(ctx context.Context) []model.NodeData {
 	f.mu.RLock()
 	eps := append([]config.Endpoint{}, f.endpoints...)
 	gen := f.gen

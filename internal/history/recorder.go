@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/crazyuploader/zfs-dash/internal/fetcher"
+	"github.com/crazyuploader/zfs-dash/internal/model"
 )
 
 // Recorder polls the fetcher and writes metrics to the Store.
@@ -62,74 +63,9 @@ func (r *Recorder) record(ctx context.Context) {
 	var samples []Sample
 
 	for _, node := range nodes {
-		for _, pool := range node.Pools {
-			samples = append(samples, Sample{
-				Key: SeriesKey(node.Label, "pool", pool.Name, "used_pct"),
-				Ts:  now, Value: pool.UsedPercent,
-			})
-			if pool.Allocated > 0 {
-				samples = append(samples, Sample{
-					Key:   SeriesKey(node.Label, "pool", pool.Name, "alloc_bytes"),
-					Ts:    now,
-					Value: pool.Allocated / (1 << 20), // Store in MiB to avoid float32 precision loss
-				})
-			}
-			if pool.Free > 0 {
-				samples = append(samples, Sample{
-					Key:   SeriesKey(node.Label, "pool", pool.Name, "free_bytes"),
-					Ts:    now,
-					Value: pool.Free / (1 << 20), // Store in MiB to avoid float32 precision loss
-				})
-			}
-		}
-		if sys := node.System; sys != nil {
-			// Fixed "node" name component keeps series keys stable even if
-			// the reported hostname changes.
-			if sys.HasCPURates {
-				samples = append(samples, Sample{
-					Key: SeriesKey(node.Label, "system", "node", "cpu_pct"),
-					Ts:  now, Value: sys.CPUBusyPct,
-				})
-			}
-			if sys.MemTotal > 0 {
-				samples = append(samples, Sample{
-					Key: SeriesKey(node.Label, "system", "node", "mem_used_pct"),
-					Ts:  now, Value: sys.MemUsedPct,
-				})
-			}
-			if sys.HasLoad {
-				samples = append(samples, Sample{
-					Key: SeriesKey(node.Label, "system", "node", "load1"),
-					Ts:  now, Value: sys.Load1,
-				})
-			}
-		}
-		for _, disk := range node.Disks {
-			if disk.HasTemperature {
-				samples = append(samples, Sample{
-					Key: SeriesKey(node.Label, "disk", disk.Device, "temp_c"),
-					Ts:  now, Value: disk.Temperature,
-				})
-			}
-			if disk.HasPercentUsed {
-				samples = append(samples, Sample{
-					Key: SeriesKey(node.Label, "disk", disk.Device, "wear_pct"),
-					Ts:  now, Value: disk.PercentageUsed,
-				})
-			}
-			if disk.HasWearLeveling {
-				samples = append(samples, Sample{
-					Key: SeriesKey(node.Label, "disk", disk.Device, "wear_lvl"),
-					Ts:  now, Value: disk.WearLevelingCount,
-				})
-			}
-			if disk.PowerOnHours > 0 {
-				samples = append(samples, Sample{
-					Key: SeriesKey(node.Label, "disk", disk.Device, "pow_hrs"),
-					Ts:  now, Value: disk.PowerOnHours,
-				})
-			}
-		}
+		samples = append(samples, poolSamples(node, now)...)
+		samples = append(samples, systemSamples(node, now)...)
+		samples = append(samples, diskSamples(node, now)...)
 	}
 
 	if len(samples) == 0 {
@@ -140,4 +76,92 @@ func (r *Recorder) record(ctx context.Context) {
 	} else {
 		slog.Debug("history recorded", "samples", len(samples))
 	}
+}
+
+// poolSamples builds the pool series samples for one node.
+func poolSamples(node model.NodeData, now time.Time) []Sample {
+	var samples []Sample
+	for _, pool := range node.Pools {
+		samples = append(samples, Sample{
+			Key: SeriesKey(node.Label, "pool", pool.Name, "used_pct"),
+			Ts:  now, Value: pool.UsedPercent,
+		})
+		if pool.Allocated > 0 {
+			samples = append(samples, Sample{
+				Key:   SeriesKey(node.Label, "pool", pool.Name, "alloc_bytes"),
+				Ts:    now,
+				Value: pool.Allocated / (1 << 20), // Store in MiB to avoid float32 precision loss
+			})
+		}
+		if pool.Free > 0 {
+			samples = append(samples, Sample{
+				Key:   SeriesKey(node.Label, "pool", pool.Name, "free_bytes"),
+				Ts:    now,
+				Value: pool.Free / (1 << 20), // Store in MiB to avoid float32 precision loss
+			})
+		}
+	}
+	return samples
+}
+
+// systemSamples builds the node_exporter series samples for one node.
+// The fixed "node" name component keeps series keys stable even if the
+// reported hostname changes.
+func systemSamples(node model.NodeData, now time.Time) []Sample {
+	sys := node.System
+	if sys == nil {
+		return nil
+	}
+	var samples []Sample
+	if sys.HasCPURates {
+		samples = append(samples, Sample{
+			Key: SeriesKey(node.Label, "system", "node", "cpu_pct"),
+			Ts:  now, Value: sys.CPUBusyPct,
+		})
+	}
+	if sys.MemTotal > 0 {
+		samples = append(samples, Sample{
+			Key: SeriesKey(node.Label, "system", "node", "mem_used_pct"),
+			Ts:  now, Value: sys.MemUsedPct,
+		})
+	}
+	if sys.HasLoad {
+		samples = append(samples, Sample{
+			Key: SeriesKey(node.Label, "system", "node", "load1"),
+			Ts:  now, Value: sys.Load1,
+		})
+	}
+	return samples
+}
+
+// diskSamples builds the SMART disk series samples for one node.
+func diskSamples(node model.NodeData, now time.Time) []Sample {
+	var samples []Sample
+	for _, disk := range node.Disks {
+		if disk.HasTemperature {
+			samples = append(samples, Sample{
+				Key: SeriesKey(node.Label, "disk", disk.Device, "temp_c"),
+				Ts:  now, Value: disk.Temperature,
+			})
+		}
+		if disk.HasPercentUsed {
+			samples = append(samples, Sample{
+				Key: SeriesKey(node.Label, "disk", disk.Device, "wear_pct"),
+				Ts:  now, Value: disk.PercentageUsed,
+			})
+		}
+		if disk.HasWearLeveling {
+			samples = append(samples, Sample{
+				Key: SeriesKey(node.Label, "disk", disk.Device, "wear_lvl"),
+				Ts:  now, Value: disk.WearLevelingCount,
+			})
+		}
+		if disk.PowerOnHours > 0 {
+			samples = append(samples, Sample{
+				Key: SeriesKey(node.Label, "disk", disk.Device, "pow_hrs"),
+				Ts:  now, Value: disk.PowerOnHours,
+			})
+		}
+	}
+	return samples
 }
