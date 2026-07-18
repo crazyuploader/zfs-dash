@@ -695,8 +695,8 @@ func funcMap() template.FuncMap {
 			return part / total
 		},
 		"memUsed": func(s *model.SystemInfo) float64 { return s.MemTotal - s.MemAvailable },
-		"join":           strings.Join,
-		"dict":           dict,
+		"join":    strings.Join,
+		"dict":    dict,
 	}
 }
 
