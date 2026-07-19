@@ -47,9 +47,11 @@ body { display: flex; flex-direction: column; height: 100dvh; }
 
 .kind-group { display:flex; flex-direction:column; gap:0.1rem; margin-bottom:var(--space-2); }
 .kind-header {
+  display:flex; align-items:center; gap:0.35rem;
   font-size:0.6rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase;
   color:var(--text-faint); padding:0.1rem 0 0.2rem;
 }
+.kind-header svg { width:11px; height:11px; flex-shrink:0; opacity:0.85; }
 
 /* Disk row — collapsible */
 .disk-group { display:flex; flex-direction:column; border-radius:var(--radius-md); overflow:hidden; margin-bottom:0.15rem; }
@@ -98,9 +100,18 @@ body { display: flex; flex-direction: column; height: 100dvh; }
 }
 .chart-title { font-size:var(--text-sm); font-weight:600; color:var(--text-muted); }
 .chart-num { font-variant-numeric:tabular-nums; }
+
+/* Current-value readout — reuses the app's shared .kpi tile, same as the
+   fleet summary rows on Pools/System, so History reads as one system. */
+.gauge-strip.kpi-row { margin-bottom:0; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); }
+.gauge-strip:empty { display:none; }
+.gauge-strip .kpi-label { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
 .chart-canvas-wrap { position:relative; width:100%; }
 canvas#chart { display:block; width:100%; }
-.chart-empty { height:200px; display:flex; align-items:center; justify-content:center; color:var(--text-faint); font-size:var(--text-sm); }
+.chart-empty { min-height:200px; display:flex; align-items:center; justify-content:center; }
+.chart-empty .empty { padding:var(--space-6) var(--space-4); }
+.chart-empty .empty svg { color:var(--text-faint); }
 .chart-legend { display:flex; flex-wrap:wrap; gap:var(--space-2) var(--space-3); }
 .legend-item { display:flex; align-items:center; gap:var(--space-2); font-size:0.75rem; color:var(--text-muted); min-width:0; max-width:220px; }
 .legend-item span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; font-family:var(--font-mono); }
@@ -207,9 +218,20 @@ canvas#chart { display:block; width:100%; }
   <!-- Main -->
   <main class="main">
     <div class="chart-card">
-      <div class="chart-title" id="chart-title">Select series from the sidebar</div>
+      <div class="chart-title" id="chart-title">No metrics selected</div>
+      <div class="gauge-strip kpi-row" id="gauge-strip" role="region" aria-label="Current values"></div>
       <div class="chart-canvas-wrap" id="chart-wrap">
-        <div class="chart-empty" id="chart-empty">No series selected</div>
+        <div class="chart-empty" id="chart-empty">
+          <div class="empty">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.4" aria-hidden="true">
+              <path d="M3 3v18h18"/>
+              <path d="M7 15l3-4 3 3 4-6"/>
+            </svg>
+            <h3>Nothing plotted yet</h3>
+            <p>Pick a disk or system metric from the left to see its history.</p>
+          </div>
+        </div>
         <canvas id="chart" style="display:none"></canvas>
       </div>
       <div class="chart-legend" id="chart-legend"></div>
@@ -249,12 +271,33 @@ canvas#chart { display:block; width:100%; }
   const COLORS = ['#4f98a3','#e8af34','#dd6974','#6daa45','#9b6aba','#e07b54','#5b8dd9','#d45fa6','#3db08a','#f0c060'];
   const METRIC_LABELS = {
     used_pct: 'Usage %', alloc_bytes: 'Allocated', free_bytes: 'Free',
+    dedup_ratio: 'Dedup', frag_pct: 'Fragmentation %',
     temp_c: 'Temp °C', wear_pct: 'NVMe Wear %', wear_lvl: 'Wear Level',
-    pow_hrs: 'Pwr-On Hrs',
-    cpu_pct: 'CPU %', mem_used_pct: 'Memory %', load1: 'Load 1m',
+    pow_hrs: 'Pwr-On Hrs', media_errors: 'Media Errors',
+    realloc_sectors: 'Reallocated', pending_sectors: 'Pending Sectors',
+    spare_pct: 'NVMe Spare %', written_bytes: 'Total Written',
+    cpu_pct: 'CPU %', iowait_pct: 'IO Wait %', mem_used_pct: 'Memory %',
+    swap_used_pct: 'Swap %', load1: 'Load 1m', load5: 'Load 5m', load15: 'Load 15m',
+    pressure_cpu_pct: 'CPU Stall %', pressure_io_pct: 'IO Stall %', pressure_mem_pct: 'Mem Stall %',
+    rx_bps: 'Receive', tx_bps: 'Transmit',
   };
-  const KIND_LABELS = { pool: 'Pools', disk: 'Disks', system: 'System' };
-  const PCT_METRICS = { used_pct: 1, wear_pct: 1, cpu_pct: 1, mem_used_pct: 1 };
+  const KIND_LABELS = { pool: 'Pools', disk: 'Disks', system: 'System', fs: 'Filesystems', net: 'Network', temp: 'Sensors' };
+  /* Disk/system glyphs match the Disks toggle on Pools and the empty-state
+     icon on System; fs/net/temp fill gaps in the same line-icon language
+     so the whole sidebar reads as one system, not a new one. */
+  const KIND_ICONS = {
+    disk: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/></svg>',
+    system: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/></svg>',
+    pool: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 13 9 5 9-5"/></svg>',
+    fs: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>',
+    net: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10 3 6l4-4M3 6h11a4 4 0 0 1 4 4v1"/><path d="m17 14 4 4-4 4M21 18H10a4 4 0 0 1-4-4v-1"/></svg>',
+    temp: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4a2 2 0 0 0-4 0v10.5a4 4 0 1 0 4 0V4z"/></svg>',
+  };
+  const PCT_METRICS = {
+    used_pct: 1, wear_pct: 1, cpu_pct: 1, mem_used_pct: 1, frag_pct: 1,
+    iowait_pct: 1, swap_used_pct: 1, spare_pct: 1,
+    pressure_cpu_pct: 1, pressure_io_pct: 1, pressure_mem_pct: 1,
+  };
 
   /* ── State ── */
   let allSeries = [];
@@ -319,7 +362,7 @@ canvas#chart { display:block; width:100%; }
 
         const kh = document.createElement('div');
         kh.className = 'kind-header';
-        kh.textContent = KIND_LABELS[kind] || kind;
+        kh.innerHTML = (KIND_ICONS[kind] || '') + '<span>' + esc(KIND_LABELS[kind] || kind) + '</span>';
         kg.appendChild(kh);
 
         for (const [diskName, metrics] of Object.entries(disks)) {
@@ -444,6 +487,7 @@ canvas#chart { display:block; width:100%; }
   const tooltip = document.getElementById('chart-tooltip');
   const ttTime = document.getElementById('tt-time');
   const ttRows = document.getElementById('tt-rows');
+  const gaugeStrip = document.getElementById('gauge-strip');
   const PAD = { top: 16, right: 16, bottom: 40, left: 62 };
 
   function renderChart() {
@@ -451,9 +495,13 @@ canvas#chart { display:block; width:100%; }
     if (!activeSeries.length || !hasPts) {
       canvas.style.display = 'none';
       empty.style.display = 'flex';
-      empty.textContent = selected.size ? 'No data in selected range.' : 'No series selected.';
+      empty.querySelector('h3').textContent = selected.size ? 'No data in this range' : 'Nothing plotted yet';
+      empty.querySelector('p').textContent = selected.size
+        ? 'Try a wider time range, or give it a few refresh cycles to collect data.'
+        : 'Pick a disk or system metric from the left to see its history.';
       legendEl.innerHTML = '';
-      titleEl.textContent = 'Select series from the sidebar';
+      gaugeStrip.innerHTML = '';
+      titleEl.textContent = 'No metrics selected';
       return;
     }
     canvas.style.display = 'block';
@@ -553,15 +601,26 @@ canvas#chart { display:block; width:100%; }
     }
 
     legendEl.innerHTML = '';
+    gaugeStrip.innerHTML = '';
     for (const s of activeSeries) {
-      if (!s.info) continue;
+      if (!s.info || !s.points || !s.points.length) continue;
       const color = colorMap[s.key] || COLORS[0];
       const shortName = s.info.name.replace(/^.*\/([^/]+)$/, '$1');
+
       const li = document.createElement('div');
       li.className = 'legend-item';
       li.innerHTML = '<div class="legend-line" style="background:' + color + '"></div>' +
         '<span>' + esc(shortName) + ' · ' + esc(METRIC_LABELS[s.info.metric] || s.info.metric) + '</span>';
       legendEl.appendChild(li);
+
+      const last = s.points[s.points.length - 1];
+      const truncName = shortName.length > 14 ? shortName.slice(0, 12) + '…' : shortName;
+      const kpi = document.createElement('div');
+      kpi.className = 'kpi';
+      kpi.innerHTML = '<div class="kpi-label">' + esc(truncName) + '</div>' +
+        '<div class="kpi-val neutral">' + esc(fmtVal(last.v, s.info.metric)) + '</div>' +
+        '<div class="kpi-hint">' + esc(METRIC_LABELS[s.info.metric] || s.info.metric) + '</div>';
+      gaugeStrip.appendChild(kpi);
     }
 
     canvas._renderState = { xScale, yScale, tsSpan, minTs, maxTs, yMin, yMax, plotW, plotH, W, H };
@@ -628,23 +687,31 @@ canvas#chart { display:block; width:100%; }
   }, { passive: false });
   canvas.addEventListener('touchend', () => { tooltip.style.display = 'none'; });
 
+  const MIB_METRICS = { alloc_bytes: 1, free_bytes: 1, written_bytes: 1 };
+  const RATE_METRICS = { rx_bps: 1, tx_bps: 1 };
+
   /* ── Helpers ── */
   function fmtVal(v, metric) {
-    if (metric === 'alloc_bytes' || metric === 'free_bytes') return fmtBytes(v * (1 << 20));
+    if (MIB_METRICS[metric]) return fmtBytes(v * (1 << 20));
+    if (RATE_METRICS[metric]) return fmtBytes(v) + '/s';
     if (PCT_METRICS[metric]) return v.toFixed(1) + '%';
     if (metric === 'temp_c') return v.toFixed(1) + '°';
     if (metric === 'pow_hrs') return v.toFixed(0) + 'h';
-    if (metric === 'load1') return v.toFixed(2);
+    if (metric === 'dedup_ratio') return v.toFixed(2) + 'x';
+    if (metric === 'load1' || metric === 'load5' || metric === 'load15') return v.toFixed(2);
+    if (metric === 'media_errors' || metric === 'realloc_sectors' || metric === 'pending_sectors') return v.toFixed(0);
     if (v >= 1e6) return (v/1e6).toFixed(1) + 'M';
     if (v >= 1e3) return (v/1e3).toFixed(1) + 'K';
     return v.toFixed(1);
   }
   function fmtValFull(v, metric) {
     if (!metric) return v.toFixed(2);
-    if (metric === 'alloc_bytes' || metric === 'free_bytes') return fmtBytes(v * (1 << 20));
+    if (MIB_METRICS[metric]) return fmtBytes(v * (1 << 20));
+    if (RATE_METRICS[metric]) return fmtBytes(v) + '/s';
     if (PCT_METRICS[metric]) return v.toFixed(2) + '%';
     if (metric === 'temp_c') return v.toFixed(1) + '°C';
     if (metric === 'pow_hrs') return v.toFixed(0) + 'h';
+    if (metric === 'dedup_ratio') return v.toFixed(2) + 'x';
     return v.toFixed(2);
   }
   function fmtTime(ts, hours) {

@@ -100,13 +100,25 @@ func poolSamples(node model.NodeData, now time.Time) []Sample {
 				Value: pool.Free / (1 << 20), // Store in MiB to avoid float32 precision loss
 			})
 		}
+		if pool.DedupRatio > 0 {
+			samples = append(samples, Sample{
+				Key: SeriesKey(node.Label, "pool", pool.Name, "dedup_ratio"),
+				Ts:  now, Value: pool.DedupRatio,
+			})
+		}
+		samples = append(samples, Sample{
+			Key: SeriesKey(node.Label, "pool", pool.Name, "frag_pct"),
+			Ts:  now, Value: pool.FragmentationRatio * 100,
+		})
 	}
 	return samples
 }
 
 // systemSamples builds the node_exporter series samples for one node.
 // The fixed "node" name component keeps series keys stable even if the
-// reported hostname changes.
+// reported hostname changes. Per-filesystem, per-interface, and per-sensor
+// readings get their own kind so they show up in the history tree as their
+// own disks/interfaces/chips rather than being flattened into "system".
 func systemSamples(node model.NodeData, now time.Time) []Sample {
 	sys := node.System
 	if sys == nil {
@@ -118,6 +130,10 @@ func systemSamples(node model.NodeData, now time.Time) []Sample {
 			Key: SeriesKey(node.Label, "system", "node", "cpu_pct"),
 			Ts:  now, Value: sys.CPUBusyPct,
 		})
+		samples = append(samples, Sample{
+			Key: SeriesKey(node.Label, "system", "node", "iowait_pct"),
+			Ts:  now, Value: sys.CPUIOWaitPct,
+		})
 	}
 	if sys.MemTotal > 0 {
 		samples = append(samples, Sample{
@@ -125,10 +141,64 @@ func systemSamples(node model.NodeData, now time.Time) []Sample {
 			Ts:  now, Value: sys.MemUsedPct,
 		})
 	}
+	if sys.SwapTotal > 0 {
+		swapUsedPct := (sys.SwapTotal - sys.SwapFree) / sys.SwapTotal * 100
+		samples = append(samples, Sample{
+			Key: SeriesKey(node.Label, "system", "node", "swap_used_pct"),
+			Ts:  now, Value: swapUsedPct,
+		})
+	}
 	if sys.HasLoad {
 		samples = append(samples, Sample{
 			Key: SeriesKey(node.Label, "system", "node", "load1"),
 			Ts:  now, Value: sys.Load1,
+		})
+		samples = append(samples, Sample{
+			Key: SeriesKey(node.Label, "system", "node", "load5"),
+			Ts:  now, Value: sys.Load5,
+		})
+		samples = append(samples, Sample{
+			Key: SeriesKey(node.Label, "system", "node", "load15"),
+			Ts:  now, Value: sys.Load15,
+		})
+	}
+	if sys.HasPressureRates {
+		samples = append(samples, Sample{
+			Key: SeriesKey(node.Label, "system", "node", "pressure_cpu_pct"),
+			Ts:  now, Value: sys.PressureCPUPct,
+		})
+		samples = append(samples, Sample{
+			Key: SeriesKey(node.Label, "system", "node", "pressure_io_pct"),
+			Ts:  now, Value: sys.PressureIOPct,
+		})
+		samples = append(samples, Sample{
+			Key: SeriesKey(node.Label, "system", "node", "pressure_mem_pct"),
+			Ts:  now, Value: sys.PressureMemPct,
+		})
+	}
+	for _, fs := range sys.Filesystems {
+		samples = append(samples, Sample{
+			Key: SeriesKey(node.Label, "fs", fs.Mountpoint, "used_pct"),
+			Ts:  now, Value: fs.UsedPct,
+		})
+	}
+	for _, n := range sys.Nets {
+		if !n.HasRates {
+			continue
+		}
+		samples = append(samples, Sample{
+			Key: SeriesKey(node.Label, "net", n.Name, "rx_bps"),
+			Ts:  now, Value: n.RxBps,
+		})
+		samples = append(samples, Sample{
+			Key: SeriesKey(node.Label, "net", n.Name, "tx_bps"),
+			Ts:  now, Value: n.TxBps,
+		})
+	}
+	for _, t := range sys.Temps {
+		samples = append(samples, Sample{
+			Key: SeriesKey(node.Label, "temp", t.Chip+" "+t.Label, "temp_c"),
+			Ts:  now, Value: t.Celsius,
 		})
 	}
 	return samples
@@ -160,6 +230,37 @@ func diskSamples(node model.NodeData, now time.Time) []Sample {
 			samples = append(samples, Sample{
 				Key: SeriesKey(node.Label, "disk", disk.Device, "pow_hrs"),
 				Ts:  now, Value: disk.PowerOnHours,
+			})
+		}
+		if disk.HasMediaErrors {
+			samples = append(samples, Sample{
+				Key: SeriesKey(node.Label, "disk", disk.Device, "media_errors"),
+				Ts:  now, Value: disk.MediaErrors,
+			})
+		}
+		if disk.ReallocatedSectors > 0 {
+			samples = append(samples, Sample{
+				Key: SeriesKey(node.Label, "disk", disk.Device, "realloc_sectors"),
+				Ts:  now, Value: disk.ReallocatedSectors,
+			})
+		}
+		if disk.PendingSectors > 0 {
+			samples = append(samples, Sample{
+				Key: SeriesKey(node.Label, "disk", disk.Device, "pending_sectors"),
+				Ts:  now, Value: disk.PendingSectors,
+			})
+		}
+		if disk.AvailableSpare > 0 {
+			samples = append(samples, Sample{
+				Key: SeriesKey(node.Label, "disk", disk.Device, "spare_pct"),
+				Ts:  now, Value: disk.AvailableSpare,
+			})
+		}
+		if disk.BytesWritten > 0 {
+			samples = append(samples, Sample{
+				Key:   SeriesKey(node.Label, "disk", disk.Device, "written_bytes"),
+				Ts:    now,
+				Value: disk.BytesWritten / (1 << 20), // Store in MiB to avoid float32 precision loss
 			})
 		}
 	}
