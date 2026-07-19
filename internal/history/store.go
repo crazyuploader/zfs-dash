@@ -235,6 +235,15 @@ func (s *Store) Prune() error {
 	return nil
 }
 
+// DeleteSeries removes a series and all its points entirely. Used to purge
+// series that should no longer be recorded (e.g. after a filter change)
+// rather than waiting for retention to age them out.
+func (s *Store) DeleteSeries(key string) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		return tx.Bucket(bucketSeries).DeleteBucket([]byte(key))
+	})
+}
+
 // ListSeries returns metadata for all stored series.
 func (s *Store) ListSeries() ([]SeriesInfo, error) {
 	var series []SeriesInfo
