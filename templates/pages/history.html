@@ -39,19 +39,35 @@ body { display: flex; flex-direction: column; height: 100dvh; }
 /* node → kind → disk → metrics */
 .series-tree { display:flex; flex-direction:column; gap:var(--space-3); }
 
-.node-group { display:flex; flex-direction:column; gap:var(--space-2); }
-.node-header {
+/* Node and kind levels collapse by default (same pattern as the disk row
+   below) so a multi-node, multi-kind tree doesn't dump everything at once. */
+.node-group { display:flex; flex-direction:column; }
+.node-toggle {
+  display:flex; align-items:center; gap:0.35rem; width:100%; text-align:left;
+  background:transparent; border:none; cursor:pointer; touch-action:manipulation;
   font-size:0.65rem; font-weight:700; letter-spacing:0.1em; text-transform:uppercase;
-  color:var(--primary); padding:0.15rem 0; border-bottom:1px solid var(--border); margin-bottom:0.25rem;
+  color:var(--primary); padding:0.3rem 0; border-bottom:1px solid var(--border);
 }
+.node-chevron { width:11px; height:11px; flex-shrink:0; margin-left:auto; color:var(--text-faint); transition:transform 180ms ease; }
+.node-group.open .node-chevron { transform:rotate(90deg); }
+.node-body { display:none; flex-direction:column; padding-top:var(--space-2); }
+.node-group.open .node-body { display:flex; }
 
-.kind-group { display:flex; flex-direction:column; gap:0.1rem; margin-bottom:var(--space-2); }
-.kind-header {
-  display:flex; align-items:center; gap:0.35rem;
+.kind-group { display:flex; flex-direction:column; margin-bottom:var(--space-1); }
+.kind-toggle {
+  display:flex; align-items:center; gap:0.35rem; width:100%; text-align:left;
+  background:transparent; border:none; cursor:pointer; touch-action:manipulation;
   font-size:0.6rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase;
-  color:var(--text-faint); padding:0.1rem 0 0.2rem;
+  color:var(--text-faint); padding:0.25rem 0.4rem; border-radius:var(--radius-md);
+  transition:var(--transition);
 }
-.kind-header svg { width:11px; height:11px; flex-shrink:0; opacity:0.85; }
+.kind-toggle:hover { background:var(--surface-2); color:var(--text-muted); }
+.kind-toggle svg:first-child { width:11px; height:11px; flex-shrink:0; opacity:0.85; }
+.kind-count { font-weight:500; opacity:0.7; text-transform:none; letter-spacing:normal; }
+.kind-chevron { width:10px; height:10px; flex-shrink:0; margin-left:auto; transition:transform 180ms ease; }
+.kind-group.open .kind-chevron { transform:rotate(90deg); }
+.kind-body { display:none; flex-direction:column; gap:0.1rem; padding:0.15rem 0 0.15rem var(--space-2); }
+.kind-group.open .kind-body { display:flex; }
 
 /* Disk row — collapsible */
 .disk-group { display:flex; flex-direction:column; border-radius:var(--radius-md); overflow:hidden; margin-bottom:0.15rem; }
@@ -350,20 +366,40 @@ canvas#chart { display:block; width:100%; }
     for (const [node, kinds] of Object.entries(byNode)) {
       const ng = document.createElement('div');
       ng.className = 'node-group';
+      // Auto-open if any metric under this node is already selected.
+      const nodeHasSelected = Object.values(kinds).some(disks =>
+        Object.values(disks).some(metrics => metrics.some(s => selected.has(s.key))));
+      if (nodeHasSelected) ng.classList.add('open');
 
-      const nh = document.createElement('div');
-      nh.className = 'node-header';
-      nh.textContent = node;
-      ng.appendChild(nh);
+      const nb = document.createElement('div');
+      nb.className = 'node-body';
+
+      const nt = document.createElement('button');
+      nt.className = 'node-toggle';
+      nt.type = 'button';
+      nt.innerHTML = '<span>' + esc(node) + '</span>' + chevronSVG.replace('disk-chevron', 'node-chevron');
+      nt.addEventListener('click', () => ng.classList.toggle('open'));
+      ng.appendChild(nt);
+      ng.appendChild(nb);
 
       for (const [kind, disks] of Object.entries(kinds)) {
         const kg = document.createElement('div');
         kg.className = 'kind-group';
+        const kindHasSelected = Object.values(disks).some(metrics => metrics.some(s => selected.has(s.key)));
+        if (kindHasSelected) kg.classList.add('open');
 
-        const kh = document.createElement('div');
-        kh.className = 'kind-header';
-        kh.innerHTML = (KIND_ICONS[kind] || '') + '<span>' + esc(KIND_LABELS[kind] || kind) + '</span>';
-        kg.appendChild(kh);
+        const kb = document.createElement('div');
+        kb.className = 'kind-body';
+
+        const kt = document.createElement('button');
+        kt.className = 'kind-toggle';
+        kt.type = 'button';
+        kt.innerHTML = (KIND_ICONS[kind] || '') +
+          '<span>' + esc(KIND_LABELS[kind] || kind) + ' <span class="kind-count">(' + Object.keys(disks).length + ')</span></span>' +
+          chevronSVG.replace('disk-chevron', 'kind-chevron');
+        kt.addEventListener('click', () => kg.classList.toggle('open'));
+        kg.appendChild(kt);
+        kg.appendChild(kb);
 
         for (const [diskName, metrics] of Object.entries(disks)) {
           const shortName = diskName.replace(/^.*\/([^/]+)$/, '$1');
@@ -421,9 +457,9 @@ canvas#chart { display:block; width:100%; }
           }
 
           dg.appendChild(dm);
-          kg.appendChild(dg);
+          kb.appendChild(dg);
         }
-        ng.appendChild(kg);
+        nb.appendChild(kg);
       }
       tree.appendChild(ng);
     }

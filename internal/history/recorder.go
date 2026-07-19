@@ -3,6 +3,7 @@ package history
 import (
 	"context"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/crazyuploader/zfs-dash/internal/fetcher"
@@ -177,6 +178,9 @@ func systemSamples(node model.NodeData, now time.Time) []Sample {
 		})
 	}
 	for _, fs := range sys.Filesystems {
+		if SkipFSMount(fs.Mountpoint) {
+			continue // small boot partition; usage barely moves, not worth a time series
+		}
 		samples = append(samples, Sample{
 			Key: SeriesKey(node.Label, "fs", fs.Mountpoint, "used_pct"),
 			Ts:  now, Value: fs.UsedPct,
@@ -265,4 +269,22 @@ func diskSamples(node model.NodeData, now time.Time) []Sample {
 		}
 	}
 	return samples
+}
+
+// exactSkipMounts are boot-adjacent mountpoints excluded from history outright.
+var exactSkipMounts = map[string]bool{
+	"/boot": true,
+}
+
+// SkipFSMount reports whether a filesystem mount is a small, rarely-changing
+// boot/firmware partition not worth trending over time (EFI system
+// partitions, /boot, and similar) as opposed to an actual data volume.
+// Exported so the series-list API can also hide any such mount recorded
+// before this filter existed.
+func SkipFSMount(mountpoint string) bool {
+	lower := strings.ToLower(mountpoint)
+	if strings.Contains(lower, "efi") {
+		return true
+	}
+	return exactSkipMounts[lower]
 }

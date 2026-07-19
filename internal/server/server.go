@@ -388,10 +388,17 @@ func registerHistoryRoutes(app *fiber.App, rl fiber.Handler, histStore *history.
 			slog.Error("history list series failed", "error", err)
 			return fiber.ErrInternalServerError
 		}
-		if series == nil {
-			series = []history.SeriesInfo{}
+		filtered := series[:0]
+		for _, s := range series {
+			if s.Kind == "fs" && history.SkipFSMount(s.Name) {
+				continue // hide boot/EFI mounts recorded before this filter existed
+			}
+			filtered = append(filtered, s)
 		}
-		return c.JSON(series)
+		if filtered == nil {
+			filtered = []history.SeriesInfo{}
+		}
+		return c.JSON(filtered)
 	})
 
 	app.Get("/api/history/query", rl, func(c fiber.Ctx) error {
