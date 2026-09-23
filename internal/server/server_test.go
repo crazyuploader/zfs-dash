@@ -1,13 +1,17 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/crazyuploader/zfs-dash/internal/config"
 	"github.com/crazyuploader/zfs-dash/internal/model"
+	"github.com/crazyuploader/zfs-dash/templates"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -83,5 +87,206 @@ func TestNodeViewsStripURL(t *testing.T) {
 	}
 	if strings.Contains(s, "internal:9134") {
 		t.Errorf("serialized view leaks the scrape endpoint: %s", s)
+	}
+}
+
+func TestNodeHealthResponse(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name       string
+		node       model.NodeData
+		maxUsage   float64
+		wantStatus int
+		wantState  string
+		wantReason string
+	}{
+		{
+			name:       "no optional exporters detected",
+			node:       model.NodeData{Label: "host", Exporters: automaticExporters()},
+			wantStatus: http.StatusOK,
+			wantState:  "unknown",
+			wantReason: "no_exporters_detected",
+		},
+		{
+			name: "system only host is up",
+			node: model.NodeData{
+				Label: "host",
+				Exporters: model.ExporterStatuses{
+					Node: model.ExporterStatus{Mode: "auto", Available: true},
+				},
+			},
+			wantStatus: http.StatusOK,
+			wantState:  "up",
+		},
+		{
+			name: "required ZFS has no pools",
+			node: model.NodeData{
+				Label: "host",
+				Exporters: model.ExporterStatuses{
+					ZFS: model.ExporterStatus{Mode: "enabled", Available: true},
+				},
+			},
+			wantStatus: http.StatusServiceUnavailable,
+			wantState:  "no_pools",
+		},
+		{
+			name: "automatic ZFS reports degraded pool",
+			node: model.NodeData{
+				Label: "host",
+				Exporters: model.ExporterStatuses{
+					ZFS: model.ExporterStatus{Mode: "auto", Available: true},
+				},
+				Pools: []model.Pool{{Name: "tank", Health: model.HealthDegraded}},
+			},
+			wantStatus: http.StatusServiceUnavailable,
+			wantState:  "degraded",
+			wantReason: "unhealthy_pools",
+		},
+		{
+			name: "pool exceeds usage threshold",
+			node: model.NodeData{
+				Label: "host",
+				Exporters: model.ExporterStatuses{
+					ZFS: model.ExporterStatus{Mode: "auto", Available: true},
+				},
+				Pools: []model.Pool{{
+					Name: "tank", Health: model.HealthOnline, UsedPercent: 91,
+				}},
+			},
+			maxUsage:   90,
+			wantStatus: http.StatusServiceUnavailable,
+			wantState:  "degraded",
+			wantReason: "pool_over_threshold",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			status, body := callNodeHealth(t, tt.node, tt.maxUsage)
+			if status != tt.wantStatus {
+				t.Errorf("status = %d, want %d", status, tt.wantStatus)
+			}
+			if got := body["status"]; got != tt.wantState {
+				t.Errorf("state = %v, want %q", got, tt.wantState)
+			}
+			if got := body["reason"]; got != tt.wantReason && tt.wantReason != "" {
+				t.Errorf("reason = %v, want %q", got, tt.wantReason)
+			}
+		})
+	}
+}
+
+func automaticExporters() model.ExporterStatuses {
+	return model.ExporterStatuses{
+		Node:     model.ExporterStatus{Mode: "auto"},
+		ZFS:      model.ExporterStatus{Mode: "auto"},
+		Smartctl: model.ExporterStatus{Mode: "auto"},
+	}
+}
+
+func callNodeHealth(
+	t *testing.T,
+	node model.NodeData,
+	maxUsage float64,
+) (int, map[string]any) {
+	t.Helper()
+	app := fiber.New()
+	app.Get("/", func(c fiber.Ctx) error {
+		return nodeHealthResponse(
+			c,
+			&node,
+			node.Label,
+			&config.Config{MaxUsagePercent: maxUsage},
+		)
+	})
+	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/", http.NoBody))
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Errorf("close response: %v", err)
+		}
+	}()
+	body := map[string]any{}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	return resp.StatusCode, body
+}
+
+func TestTemplatesRenderHostDiscoveryStates(t *testing.T) {
+	t.Parallel()
+	pages, err := templates.Pages(funcMap())
+	if err != nil {
+		t.Fatalf("parse templates: %v", err)
+	}
+	now := time.Now()
+	nodes := []model.NodeData{
+		{
+			Label:     "system-host",
+			FetchedAt: now,
+			Exporters: model.ExporterStatuses{
+				Node: model.ExporterStatus{Mode: "auto", Available: true},
+				ZFS:  model.ExporterStatus{Mode: "auto", Available: true},
+			},
+			System: &model.SystemInfo{Cores: 4, MemTotal: 1024, MemAvailable: 512},
+			Pools:  []model.Pool{{Name: "tank", Health: model.HealthOnline}},
+		},
+		{
+			Label:     "required-host",
+			FetchedAt: now,
+			Exporters: model.ExporterStatuses{
+				Node: model.ExporterStatus{
+					Mode: "enabled", Error: "exporter unavailable",
+				},
+				Smartctl: model.ExporterStatus{
+					Mode: "enabled", Error: "exporter unavailable",
+				},
+			},
+		},
+	}
+	cfg := &config.Config{Refresh: 5 * time.Minute}
+
+	tests := []struct {
+		name string
+		data any
+	}{
+		{
+			name: "dashboard",
+			data: func() templateData {
+				data := buildTemplateData(nodes)
+				data.pageData = newPageData("storage", cfg, true, nodes)
+				return data
+			}(),
+		},
+		{
+			name: "system",
+			data: func() systemPageData {
+				data := buildSystemPageData(hostViews(nodes))
+				data.pageData = newPageData("system", cfg, true, nodes)
+				return data
+			}(),
+		},
+		{
+			name: "history",
+			data: historyData{
+				pageData:       newPageData("history", cfg, true, nodes),
+				RetentionHours: 720,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			var output bytes.Buffer
+			if err := pages[tt.name].ExecuteTemplate(&output, "base", tt.data); err != nil {
+				t.Fatalf("render template: %v", err)
+			}
+			if !strings.Contains(output.String(), "System Stats") {
+				t.Error("rendered page is missing product title")
+			}
+		})
 	}
 }

@@ -8,7 +8,7 @@ import (
 	"github.com/crazyuploader/zfs-dash/internal/parser"
 )
 
-// FSInfo holds usage for one real (non-ZFS) filesystem mount.
+// FSInfo holds usage for one real filesystem mount.
 type FSInfo struct {
 	Device     string  `json:"device"`
 	FSType     string  `json:"fstype"`
@@ -86,12 +86,12 @@ type SystemInfo struct {
 	Counters *SystemCounters `json:"-"`
 }
 
-// realFSTypes are filesystem types shown on the system page. ZFS mounts are
-// covered by the pools view; tmpfs/fuse/overlay are noise.
+// realFSTypes are filesystem types shown on the system page. Include ZFS
+// mounts because a host need not have a separate ZFS exporter.
 var realFSTypes = map[string]bool{
 	"ext2": true, "ext3": true, "ext4": true,
 	"xfs": true, "btrfs": true, "vfat": true,
-	"f2fs": true, "ntfs": true,
+	"f2fs": true, "ntfs": true, "zfs": true,
 }
 
 // skipNetPrefixes are interface prefixes hidden from the network list:

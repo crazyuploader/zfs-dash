@@ -10,7 +10,7 @@ import (
 
 var serveCmd = &cobra.Command{
 	Use:   "serve",
-	Short: "Start the ZFS dashboard web server",
+	Short: "Start the system and storage dashboard",
 	RunE: func(_ *cobra.Command, _ []string) error {
 		if err := configInitError(); err != nil {
 			return fmt.Errorf("read config: %w", err)
@@ -20,8 +20,8 @@ var serveCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("config: %w", err)
 		}
-		if len(cfg.Endpoints) == 0 {
-			return fmt.Errorf("no endpoints configured; use --endpoints or config.yaml")
+		if len(cfg.Hosts) == 0 {
+			return fmt.Errorf("no hosts configured; use --hosts, --endpoints, or config.yaml")
 		}
 		return server.Start(cfg)
 	},

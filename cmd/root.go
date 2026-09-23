@@ -16,8 +16,8 @@ var initConfigErr error
 
 var rootCmd = &cobra.Command{
 	Use:           "zfs-dash",
-	Short:         "ZFS Dashboard — real-time pool monitoring",
-	Long:          `Pull ZFS exporter metrics from multiple Prometheus endpoints and serve a minimal real-time dashboard.`,
+	Short:         "System and storage monitoring with host discovery",
+	Long:          `Discover node, ZFS, and SMART exporters on configured hosts and serve a live system and storage dashboard.`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }
@@ -35,6 +35,7 @@ func init() {
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default ./config.yaml)")
 	rootCmd.PersistentFlags().StringSlice("endpoints", nil, "ZFS exporter /metrics URLs (comma-separated or repeated)")
+	rootCmd.PersistentFlags().StringSlice("hosts", nil, "hostnames or IPs to discover (comma-separated or repeated)")
 	rootCmd.PersistentFlags().String("addr", ":8054", "listen address")
 	rootCmd.PersistentFlags().Int("refresh", 300, "auto-refresh interval in seconds")
 	rootCmd.PersistentFlags().Bool("debug", false, "enable debug logging")
@@ -47,6 +48,7 @@ func init() {
 	rootCmd.PersistentFlags().Duration("history-record-interval", 0, "how often to record history samples (e.g. 5m; 0 uses refresh interval)")
 
 	mustBindPFlag("endpoints", "endpoints")
+	mustBindPFlag("hosts", "hosts")
 	mustBindPFlag("addr", "addr")
 	mustBindPFlag("refresh", "refresh")
 	mustBindPFlag("debug", "debug")

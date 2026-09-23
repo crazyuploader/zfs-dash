@@ -1,3 +1,4 @@
+// Package config validates host discovery and runtime settings.
 package config
 
 import (
@@ -9,8 +10,8 @@ import (
 	"github.com/spf13/viper"
 )
 
-// Endpoint is a single ZFS exporter target with optional companion exporters.
-type Endpoint struct {
+// legacyEndpoint preserves the original ZFS-first configuration format.
+type legacyEndpoint struct {
 	URL             string `mapstructure:"url"`
 	Label           string `mapstructure:"label"`
 	Location        string `mapstructure:"location"`
@@ -28,7 +29,7 @@ type HistoryConfig struct {
 
 // Config holds all runtime options.
 type Config struct {
-	Endpoints       []Endpoint
+	Hosts           []Host
 	Addr            string
 	Refresh         time.Duration
 	CacheTTL        time.Duration
@@ -73,51 +74,33 @@ func parseFlexDuration(v any, def time.Duration) time.Duration {
 
 // Load reads viper state into a validated Config.
 func Load() (*Config, error) {
-	histRetention := viper.GetDuration("history.retention")
+	return load(viper.GetViper())
+}
+
+func load(v *viper.Viper) (*Config, error) {
+	histRetention := v.GetDuration("history.retention")
 	if histRetention <= 0 {
 		histRetention = 720 * time.Hour // 30 days default
 	}
 	cfg := &Config{
-		Addr:            viper.GetString("addr"),
-		Refresh:         parseFlexDuration(viper.Get("refresh"), 300*time.Second),
-		CacheTTL:        time.Duration(cmp.Or(viper.GetInt("cache_ttl"), 30)) * time.Second,
-		Debug:           viper.GetBool("debug"),
-		TrustedProxies:  viper.GetStringSlice("trusted_proxies"),
-		MaxUsagePercent: viper.GetFloat64("max_usage_percent"),
-		LogFormat:       cmp.Or(viper.GetString("log_format"), "text"),
+		Addr:            cmp.Or(v.GetString("addr"), ":8054"),
+		Refresh:         parseFlexDuration(v.Get("refresh"), 300*time.Second),
+		CacheTTL:        time.Duration(cmp.Or(v.GetInt("cache_ttl"), 30)) * time.Second,
+		Debug:           v.GetBool("debug"),
+		TrustedProxies:  v.GetStringSlice("trusted_proxies"),
+		MaxUsagePercent: v.GetFloat64("max_usage_percent"),
+		LogFormat:       cmp.Or(v.GetString("log_format"), "text"),
 		History: HistoryConfig{
-			Enabled:        viper.GetBool("history.enabled"),
-			Path:           cmp.Or(viper.GetString("history.path"), "./data/history.db"),
+			Enabled:        v.GetBool("history.enabled"),
+			Path:           cmp.Or(v.GetString("history.path"), "./data/history.db"),
 			Retention:      histRetention,
-			RecordInterval: viper.GetDuration("history.record_interval"),
+			RecordInterval: v.GetDuration("history.record_interval"),
 		},
 	}
-	// Try structured endpoints block (config file).
-	var eps []Endpoint
-	if viper.IsSet("endpoints") {
-		if err := viper.UnmarshalKey("endpoints", &eps); err != nil {
-			return nil, fmt.Errorf("decode endpoints: %w", err)
-		}
-
-		if len(eps) > 0 {
-			for i, ep := range eps {
-				if ep.URL == "" {
-					return nil, fmt.Errorf("endpoint[%d] missing url", i)
-				}
-				if ep.Label == "" {
-					eps[i].Label = ep.URL
-				}
-			}
-			cfg.Endpoints = eps
-			return cfg, nil
-		}
-	}
-
-	// Fall back to flat string slice (--endpoints flag / env).
-	for _, u := range viper.GetStringSlice("endpoints") {
-		if u != "" {
-			cfg.Endpoints = append(cfg.Endpoints, Endpoint{URL: u, Label: u})
-		}
+	var err error
+	cfg.Hosts, err = loadHosts(v)
+	if err != nil {
+		return nil, fmt.Errorf("hosts: %w", err)
 	}
 	return cfg, nil
 }

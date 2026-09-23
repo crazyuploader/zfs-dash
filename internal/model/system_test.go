@@ -100,11 +100,11 @@ func TestExtractSystem(t *testing.T) {
 		t.Errorf("MemUsedPct = %v, want %v", sys.MemUsedPct, wantMemPct)
 	}
 
-	// Filesystems: only ext4 + vfat survive (zfs and tmpfs filtered).
-	if len(sys.Filesystems) != 2 {
-		t.Fatalf("Filesystems = %+v, want 2 entries", sys.Filesystems)
+	// ZFS mounts remain visible even without a separate ZFS exporter; tmpfs is filtered.
+	if len(sys.Filesystems) != 3 {
+		t.Fatalf("Filesystems = %+v, want 3 entries", sys.Filesystems)
 	}
-	if sys.Filesystems[0].Mountpoint != "/" || sys.Filesystems[1].Mountpoint != "/boot/efi" {
+	if sys.Filesystems[0].Mountpoint != "/" || sys.Filesystems[1].Mountpoint != "/boot/efi" || sys.Filesystems[2].Mountpoint != "/nova" {
 		t.Errorf("filesystem order/mounts wrong: %+v", sys.Filesystems)
 	}
 	if sys.Filesystems[0].UsedPct < 82 || sys.Filesystems[0].UsedPct > 83 {
