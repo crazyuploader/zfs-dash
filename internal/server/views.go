@@ -1,8 +1,6 @@
 package server
 
 import (
-	"net/url"
-	"strings"
 	"time"
 
 	"github.com/crazyuploader/zfs-dash/internal/config"
@@ -30,11 +28,6 @@ func newPageData(
 		HistoryEnabled: historyEnabled,
 		RefreshSecs:    int(cfg.Refresh.Seconds()),
 	}
-	for _, host := range cfg.Hosts {
-		if host.Exporters.ZFS.Mode == config.ModeEnabled || host.Exporters.Smartctl.Mode == config.ModeEnabled {
-			data.StorageEnabled = true
-		}
-	}
 	for _, node := range nodes {
 		if node.Exporters.StorageVisible() {
 			data.StorageEnabled = true
@@ -44,25 +37,9 @@ func newPageData(
 	return data
 }
 
-// sanitizeError removes the scrape URL (and its host:port, which net errors
-// embed separately, e.g. "dial tcp host:port") from fetch error messages so
-// internal addresses are not exposed to browsers or API consumers.
-func sanitizeError(msg, rawURL string) string {
-	if msg == "" || rawURL == "" {
-		return msg
-	}
-	msg = strings.ReplaceAll(msg, `"`+rawURL+`"`, "endpoint")
-	msg = strings.ReplaceAll(msg, rawURL, "endpoint")
-	if u, err := url.Parse(rawURL); err == nil && u.Host != "" {
-		msg = strings.ReplaceAll(msg, u.Host, "endpoint")
-	}
-	return msg
-}
-
 // nodeView is the browser-facing subset of NodeData, used both for the
 // page's inline JS and the /api/metrics response.
-// URL is intentionally excluded so internal scrape endpoints are never
-// exposed to browsers or API consumers.
+// Scrape URLs stay in config and are never exposed to browsers or API consumers.
 type nodeView struct {
 	Label        string                 `json:"label"`
 	Location     string                 `json:"location,omitempty"`
@@ -185,7 +162,7 @@ func nodeViews(nodes []model.NodeData) []nodeView {
 			Label:        n.Label,
 			Location:     n.Location,
 			FetchedAt:    n.FetchedAt,
-			Error:        sanitizeError(n.Error, n.URL),
+			Error:        n.Error,
 			Exporters:    n.Exporters,
 			ExporterInfo: n.ExporterInfo,
 			SmartctlInfo: n.SmartctlInfo,

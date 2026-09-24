@@ -80,6 +80,7 @@ func TestLoadHostsValidation(t *testing.T) {
 		{name: "mixed formats", yaml: "hosts: [nas]\nendpoints: ['http://old:9134/metrics']", want: "either hosts or legacy endpoints"},
 		{name: "legacy missing URL", yaml: "endpoints: [{label: nas}]", want: "missing url"},
 		{name: "numeric host", yaml: "hosts: [42]", want: "decode"},
+		{name: "null host", yaml: "hosts: [null]", want: "missing address"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -1,4 +1,4 @@
-# zfs-dash
+# System Stats
 
 Lightweight system and storage monitoring for your hosts, with a **System Stats** dashboard. Configure hostnames or IP addresses; the app discovers [node_exporter](https://github.com/prometheus/node_exporter), [pdf/zfs_exporter](https://github.com/pdf/zfs_exporter), and [smartctl_exporter](https://github.com/prometheus-community/smartctl_exporter), then shows the available metrics.
 
@@ -155,7 +155,7 @@ The **Storage** page (`/storage`, also available at `/pools`) shows ZFS pools an
 
 ## History
 
-When `history.enabled: true`, zfs-dash records available pool, disk, and system metrics to a local [bbolt](https://github.com/etcd-io/bbolt) database, sampling every `history.record_interval` (defaults to `refresh`).
+When `history.enabled: true`, System Stats records available pool, disk, and system metrics to a local [bbolt](https://github.com/etcd-io/bbolt) database, sampling every `history.record_interval` (defaults to `refresh`).
 
 Charts live at **`/history`**; the History tab appears in the topbar once enabled. Previously recorded data remains available when an exporter disappears, until it expires under the retention setting.
 
@@ -180,7 +180,7 @@ Charts live at **`/history`**; the History tab appears in the topbar once enable
 | `net/{interface}/rx_bps`, `tx_bps` | Receive and transmit bytes per second |
 | `temp/{chip label}/temp_c` | hwmon sensor temperature °C |
 
-zfs-dash prunes data older than the retention window. Each data point stores 8 bytes of values: 30 days at a 5-minute interval across 50 disks × 4 metrics ≈ 14 MB raw, around 35 MB on disk with bbolt key and page overhead.
+System Stats prunes data older than the retention window. Each data point stores 8 bytes of values: 30 days at a 5-minute interval across 50 disks × 4 metrics ≈ 14 MB raw, around 35 MB on disk with bbolt key and page overhead.
 
 **Docker:** uncomment the `./data:/data` volume in `docker-compose.yml` and set `history.path: /data/history.db` in your config.
 

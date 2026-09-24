@@ -151,3 +151,16 @@ func TestExtractSystemEmpty(t *testing.T) {
 		t.Errorf("ExtractSystem(unrelated) = %+v, want nil", got)
 	}
 }
+
+func TestExtractSystemWithPartialCollectors(t *testing.T) {
+	samples, err := parser.Parse(strings.NewReader(`node_filesystem_size_bytes{device="tank",fstype="zfs",mountpoint="/tank"} 1000
+node_filesystem_avail_bytes{device="tank",fstype="zfs",mountpoint="/tank"} 400
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sys := ExtractSystem(samples)
+	if sys == nil || len(sys.Filesystems) != 1 || sys.Filesystems[0].UsedPct != 60 {
+		t.Fatalf("partial node_exporter metrics were discarded: %+v", sys)
+	}
+}

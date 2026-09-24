@@ -21,7 +21,8 @@ import (
 const (
 	fetchTimeout     = 10 * time.Second
 	maxResponseBytes = 10 << 20
-	maxHostWorkers   = 8
+	// ponytail: keep one fixed cap; make it configurable only if large fleets need tuning.
+	maxHostWorkers = 8
 )
 
 // Fetcher caches host snapshots. Each refresh retries automatic discovery;
@@ -152,13 +153,16 @@ func (f *Fetcher) collect(ctx context.Context, force bool) ([]model.NodeData, bo
 			f.mu.Unlock()
 			continue // configuration changed during I/O; fetch the new targets
 		}
-		if ctx.Err() == nil {
-			for i := range results {
-				f.rates.apply(hosts[i].Exporters.Node.URL, results[i].System)
-			}
-			f.cache = results
-			f.expiresAt = time.Now().Add(f.cacheTTL)
+		if ctx.Err() != nil {
+			data := append([]model.NodeData{}, f.cache...)
+			f.mu.Unlock()
+			return data, true
 		}
+		for i := range results {
+			f.rates.apply(hosts[i].Exporters.Node.URL, results[i].System)
+		}
+		f.cache = results
+		f.expiresAt = time.Now().Add(f.cacheTTL)
 		f.mu.Unlock()
 		return append([]model.NodeData{}, results...), false
 	}
@@ -231,32 +235,31 @@ func (f *Fetcher) fetchExporter(
 		return result
 	}
 	samples, err := f.fetchRaw(ctx, exp.URL)
-	message := "exporter unavailable"
-	if err == nil && !recognizesExporter(samples, kind) {
-		message = "no recognizable " + kind + " metrics"
-		err = fmt.Errorf("%s", message)
-	}
-	if err != nil {
-		level := slog.LevelDebug
-		if mode == config.ModeEnabled {
-			level = slog.LevelWarn
-			result.status.Error = message
-		}
-		slog.Log(
-			ctx,
-			level,
-			"exporter scrape failed",
-			"label",
-			label,
-			"exporter",
-			kind,
-			"reason",
-			message,
-		)
+	if err == nil && recognizesExporter(samples, kind) {
+		result.status.Available = true
+		result.samples = samples
 		return result
 	}
-	result.status.Available = true
-	result.samples = samples
+	message := "exporter unavailable"
+	if err == nil {
+		message = "no recognizable " + kind + " metrics"
+	}
+	level := slog.LevelDebug
+	if mode == config.ModeEnabled {
+		level = slog.LevelWarn
+		result.status.Error = message
+	}
+	slog.Log(
+		ctx,
+		level,
+		"exporter scrape failed",
+		"label",
+		label,
+		"exporter",
+		kind,
+		"reason",
+		message,
+	)
 	return result
 }
 
@@ -293,7 +296,6 @@ func (f *Fetcher) fetchOne(ctx context.Context, host config.Host) model.NodeData
 	nd := model.NodeData{
 		Label:     host.Label,
 		Location:  host.Location,
-		URL:       host.Exporters.ZFS.URL,
 		FetchedAt: time.Now(),
 		Exporters: model.ExporterStatuses{
 			Node: node.status, ZFS: zfs.status, Smartctl: smartctl.status,

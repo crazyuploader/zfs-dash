@@ -130,8 +130,10 @@ func ExtractSystem(samples []parser.Sample) *SystemInfo {
 	tempVals := map[string]map[string]float64{} // chip -> sensor -> °C
 	chipNames := map[string]string{}            // chip -> friendly name
 	sensorLabels := map[string]map[string]string{}
+	recognized := false
 
 	for _, s := range samples {
+		recognized = recognized || strings.HasPrefix(s.Name, "node_")
 		switch s.Name {
 		case "node_cpu_seconds_total":
 			cores[s.Labels["cpu"]] = true
@@ -215,8 +217,7 @@ func ExtractSystem(samples []parser.Sample) *SystemInfo {
 		}
 	}
 
-	// Nothing recognizably node_exporter in the samples.
-	if sys.MemTotal == 0 && len(cores) == 0 && sys.Hostname == "" {
+	if !recognized {
 		return nil
 	}
 

@@ -314,11 +314,14 @@ func TestFetcher_CancelledScrape(t *testing.T) {
 	})
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	done := make(chan struct{})
-	go func() { f.Refresh(ctx); close(done) }()
+	done := make(chan []model.NodeData, 1)
+	go func() { done <- f.Refresh(ctx) }()
 	<-started
 	cancel()
-	<-done
+	got := <-done
+	if len(got) != 1 || got[0].Label != "nas" || !got[0].FetchedAt.IsZero() {
+		t.Fatalf("cancelled collection returned partial results: %+v", got)
+	}
 	pending := f.Snapshot()
 	if len(pending) != 1 || pending[0].Label != "nas" || !pending[0].FetchedAt.IsZero() || pending[0].Error != "" {
 		t.Fatalf("cancelled collection poisoned pending snapshot: %+v", pending)

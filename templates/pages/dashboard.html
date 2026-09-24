@@ -260,7 +260,7 @@
   background: var(--warn-section-bg);
 }
 
-/* Faulted/with exporter errors variant */
+/* Faulted/exporter error variant */
 .alert-section.faulted {
   border-color: var(--err-section-border);
   background: var(--err-section-bg);
@@ -362,31 +362,6 @@
 .faulted .alert-body .pool-card:hover {
   border-color: color-mix(in oklab, var(--error) 50%, transparent);
 }
-
-/* Node failures (with exporter errors) inside the faulted alert section */
-.alert-node-err {
-  background: color-mix(in oklab, var(--error-dim) 60%, transparent);
-  border: 1px solid color-mix(in oklab, var(--error) 22%, transparent);
-  border-radius: var(--radius-lg); padding: var(--space-4);
-  display: flex; flex-direction: column; gap: var(--space-3);
-}
-.alert-node-err-head {
-  display: flex; align-items: center; gap: var(--space-2);
-}
-.alert-node-err-head > svg { margin-top: 2px; }
-.alert-node-err-label { font-size: var(--text-sm); font-weight: 600; color: var(--error); line-height: 1; }
-.alert-node-err-loc {
-  font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
-  padding: 2px 7px; border-radius: var(--radius-full);
-  background: rgba(221,105,116,0.15); color: var(--error);
-  border: 1px solid rgba(221,105,116,0.3);
-}
-.alert-node-err-msg {
-  display: flex; align-items: flex-start; gap: var(--space-2);
-  font-size: var(--text-xs); color: var(--error); font-family: var(--font-mono);
-  opacity: 0.85;
-}
-.alert-node-err-msg svg { flex-shrink: 0; margin-top: 1px; }
 
 /* Pool detail Modal ── */
 .pool-card[data-has-datasets="true"] { cursor: pointer; }
@@ -732,7 +707,7 @@
 
   <!-- ══ Per-node pools ══ -->
   {{range $ni, $node := .Nodes}}
-  <section class="node {{if or $node.Exporters.ZFS.Error $node.Exporters.Smartctl.Error}}node--error{{end}} animate-in {{if eq $ni 0}}animate-in-delayed-3{{else if eq $ni 1}}animate-in-delayed-4{{else if eq $ni 2}}animate-in-delayed-5{{else}}animate-in-delayed-6{{end}}" aria-label="Node {{$node.Label}}">
+  <section class="node {{if or $node.Exporters.ZFS.Error $node.Exporters.Smartctl.Error}}node--error{{end}} animate-in {{if eq $ni 0}}animate-in-delayed-3{{else if eq $ni 1}}animate-in-delayed-4{{else if eq $ni 2}}animate-in-delayed-5{{else}}animate-in-delayed-6{{end}}" aria-label="Host {{$node.Label}}">
 
     <div class="node-head">
       <div class="node-icon-wrap" aria-hidden="true">
@@ -770,7 +745,7 @@
         <path d="M8 7h8M8 12h8M8 17h4"/>
       </svg>
       <h3>No pools found</h3>
-      <p>The exporter returned no ZFS pool metrics for this node.</p>
+      <p>The exporter returned no ZFS pool metrics for this host.</p>
     </div>
     {{else if $node.Pools}}
     <div class="pools-grid">
@@ -1049,7 +1024,7 @@
     const id = trigger.id || '';
     trigger.setAttribute('aria-expanded', String(nowOpen));
     if (id.indexOf('toggle-') === 0 && id.indexOf('disk-toggle-') !== 0) {
-      // Alert sections: toggle-degraded / toggle-faulted / toggle-with exporter errors
+      // Alert sections: toggle-degraded / toggle-faulted
       const key = id.replace('toggle-', '');
       const body    = document.getElementById('body-' + key);
       const arrow   = document.getElementById('arrow-' + key);
@@ -1077,7 +1052,7 @@
     setOpen(trigger, trigger.getAttribute('aria-expanded') !== 'true');
   }
 
-  ['toggle-degraded', 'toggle-faulted', 'toggle-with exporter errors'].forEach(function (id) {
+  ['toggle-degraded', 'toggle-faulted'].forEach(function (id) {
     const toggle = document.getElementById(id);
     if (toggle) toggle.addEventListener('click', function () { flip(toggle); });
   });
