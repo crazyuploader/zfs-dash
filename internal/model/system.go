@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/crazyuploader/zfs-dash/internal/parser"
+	"github.com/crazyuploader/hostglance/internal/parser"
 )
 
 // FSInfo holds usage for one real filesystem mount.

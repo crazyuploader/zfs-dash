@@ -37,7 +37,7 @@ hosts:
         # A URL override alone stays automatic; add mode: enabled to require it.
 
 # Existing endpoints entries and --endpoints remain supported, but cannot be
-# combined with hosts, --hosts, or ZFSDASH_HOSTS. Legacy url requires ZFS;
+# combined with hosts, --hosts, or HOSTGLANCE_HOSTS. Legacy url requires ZFS;
 # supplied companion URLs are optional, and omitted URLs get no extra probes.
 # Legacy ZFS endpoints can still supply bundled SMART metrics; new hosts entries
 # collect SMART only through their smartctl source and respect mode: disabled.

@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/crazyuploader/zfs-dash/internal/config"
-	"github.com/crazyuploader/zfs-dash/internal/model"
-	"github.com/crazyuploader/zfs-dash/templates"
+	"github.com/crazyuploader/hostglance/internal/config"
+	"github.com/crazyuploader/hostglance/internal/model"
+	"github.com/crazyuploader/hostglance/templates"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -280,7 +280,7 @@ func TestTemplatesRenderHostDiscoveryStates(t *testing.T) {
 			if err := pages[tt.name].ExecuteTemplate(&output, "base", tt.data); err != nil {
 				t.Fatalf("render template: %v", err)
 			}
-			if !strings.Contains(output.String(), "System Stats") {
+			if !strings.Contains(output.String(), "HostGlance") {
 				t.Error("rendered page is missing product title")
 			}
 		})

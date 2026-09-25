@@ -3,8 +3,8 @@ package server
 import (
 	"time"
 
-	"github.com/crazyuploader/zfs-dash/internal/config"
-	"github.com/crazyuploader/zfs-dash/internal/model"
+	"github.com/crazyuploader/hostglance/internal/config"
+	"github.com/crazyuploader/hostglance/internal/model"
 )
 
 // pageData carries the fields every page template needs (topbar/nav state).

@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/crazyuploader/zfs-dash/internal/config"
-	"github.com/crazyuploader/zfs-dash/internal/model"
+	"github.com/crazyuploader/hostglance/internal/config"
+	"github.com/crazyuploader/hostglance/internal/model"
 )
 
 func TestFetcher_Cache(t *testing.T) {

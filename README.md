@@ -1,6 +1,6 @@
-# System Stats
+# HostGlance
 
-Lightweight system and storage monitoring for your hosts, with a **System Stats** dashboard. Configure hostnames or IP addresses; the app discovers [node_exporter](https://github.com/prometheus/node_exporter), [pdf/zfs_exporter](https://github.com/pdf/zfs_exporter), and [smartctl_exporter](https://github.com/prometheus-community/smartctl_exporter), then shows the available metrics.
+Lightweight system and storage monitoring for your hosts, with a **HostGlance** dashboard. Configure hostnames or IP addresses; the app discovers [node_exporter](https://github.com/prometheus/node_exporter), [pdf/zfs_exporter](https://github.com/pdf/zfs_exporter), and [smartctl_exporter](https://github.com/prometheus-community/smartctl_exporter), then shows the available metrics.
 
 ZFS is optional. Hosts with only system metrics or disk health work independently.
 
@@ -27,7 +27,7 @@ For more settings, copy [config.yaml.example](config.yaml.example) to `config.ya
 
 ### Flags
 
-- `--config`: Config file (searches `./config.yaml`, then `~/.config/zfs-dash/config.yaml` by default).
+- `--config`: Config file (searches `./config.yaml`, then `~/.config/hostglance/config.yaml` by default).
 - `--hosts`: Comma-separated or repeated hostnames or IP addresses, with automatic exporter discovery.
 - `--endpoints`: Legacy comma-separated or repeated ZFS exporter URLs; cannot be combined with `hosts`.
 - `--addr`: Address to listen on (default: `:8054`).
@@ -41,7 +41,7 @@ For more settings, copy [config.yaml.example](config.yaml.example) to `config.ya
 - `--history-retention`: Retention period, e.g. `720h` for 30 days (default: `720h`).
 - `--history-record-interval`: How often to record history samples, e.g. `5m` (default: same as `--refresh`).
 
-For example, `go run . serve --hosts nas.home,server02.home` configures two hosts. `ZFSDASH_HOSTS=nas.home,server02.home` provides the same list through the environment. Flags take precedence over environment variables, which take precedence over file settings. Use only one target format, `hosts` or `endpoints`, across all configuration sources.
+For example, `go run . serve --hosts nas.home,server02.home` configures two hosts. `HOSTGLANCE_HOSTS=nas.home,server02.home` provides the same list through the environment. Flags take precedence over environment variables, which take precedence over file settings. Use only one target format, `hosts` or `endpoints`, across all configuration sources.
 
 ## Config
 
@@ -134,9 +134,9 @@ hosts:
 
 This preserves the original requirements and skips SMART collection. Remove the `smartctl` override to discover SMART metrics too, or change ZFS to `auto` to make it optional. Retain any custom exporter URLs when migrating. If the old ZFS URL also served SMART metrics, configure that same URL under `exporters.smartctl` with `mode: auto` to keep collecting them.
 
-Remove the old `endpoints` setting, including any `--endpoints` flag or `ZFSDASH_ENDPOINTS` environment variable. Mixing it with `hosts` is rejected. Keep the same labels and `history.path` to continue existing history without a database conversion. If an old entry omitted `label`, its label was its ZFS URL; copy that value explicitly to preserve its history keys.
+Remove the old `endpoints` setting, including any `--endpoints` flag or `HOSTGLANCE_ENDPOINTS` environment variable. Mixing it with `hosts` is rejected. Keep the same labels and `history.path` to continue existing history without a database conversion. If an old entry omitted `label`, its label was its ZFS URL; copy that value explicitly to preserve its history keys.
 
-The executable, module, container image, `ZFSDASH_*` environment prefix, and default config/history locations retain their existing names.
+The executable is `hostglance`, the container image is `ghcr.io/crazyuploader/hostglance`, environment variables use the `HOSTGLANCE_*` prefix, and the default user config directory is `~/.config/hostglance`.
 
 ## System and Storage
 
@@ -155,7 +155,7 @@ The **Storage** page (`/storage`, also available at `/pools`) shows ZFS pools an
 
 ## History
 
-When `history.enabled: true`, System Stats records available pool, disk, and system metrics to a local [bbolt](https://github.com/etcd-io/bbolt) database, sampling every `history.record_interval` (defaults to `refresh`).
+When `history.enabled: true`, HostGlance records available pool, disk, and system metrics to a local [bbolt](https://github.com/etcd-io/bbolt) database, sampling every `history.record_interval` (defaults to `refresh`).
 
 Charts live at **`/history`**; the History tab appears in the topbar once enabled. Previously recorded data remains available when an exporter disappears, until it expires under the retention setting.
 
@@ -180,7 +180,7 @@ Charts live at **`/history`**; the History tab appears in the topbar once enable
 | `net/{interface}/rx_bps`, `tx_bps` | Receive and transmit bytes per second |
 | `temp/{chip label}/temp_c` | hwmon sensor temperature °C |
 
-System Stats prunes data older than the retention window. Each data point stores 8 bytes of values: 30 days at a 5-minute interval across 50 disks × 4 metrics ≈ 14 MB raw, around 35 MB on disk with bbolt key and page overhead.
+HostGlance prunes data older than the retention window. Each data point stores 8 bytes of values: 30 days at a 5-minute interval across 50 disks × 4 metrics ≈ 14 MB raw, around 35 MB on disk with bbolt key and page overhead.
 
 **Docker:** uncomment the `./data:/data` volume in `docker-compose.yml` and set `history.path: /data/history.db` in your config.
 
@@ -189,7 +189,7 @@ System Stats prunes data older than the retention window. Each data point stores
 Edits to host lists, exporter modes and URLs, `refresh`, and `debug` reload automatically. To trigger a reload manually:
 
 ```bash
-kill -HUP $(pgrep zfs-dash)
+kill -HUP $(pgrep hostglance)
 ```
 
 Changes to `cache_ttl`, history settings, or listener settings require a restart.

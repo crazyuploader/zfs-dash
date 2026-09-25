@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/crazyuploader/zfs-dash/internal/config"
-	"github.com/crazyuploader/zfs-dash/internal/server"
+	"github.com/crazyuploader/hostglance/internal/config"
+	"github.com/crazyuploader/hostglance/internal/server"
 	"github.com/spf13/cobra"
 )
 

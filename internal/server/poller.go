@@ -6,8 +6,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/crazyuploader/zfs-dash/internal/config"
-	"github.com/crazyuploader/zfs-dash/internal/fetcher"
+	"github.com/crazyuploader/hostglance/internal/config"
+	"github.com/crazyuploader/hostglance/internal/fetcher"
 )
 
 const (

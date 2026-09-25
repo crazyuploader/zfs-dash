@@ -18,11 +18,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/crazyuploader/zfs-dash/internal/config"
-	"github.com/crazyuploader/zfs-dash/internal/fetcher"
-	"github.com/crazyuploader/zfs-dash/internal/history"
-	"github.com/crazyuploader/zfs-dash/internal/model"
-	"github.com/crazyuploader/zfs-dash/templates"
+	"github.com/crazyuploader/hostglance/internal/config"
+	"github.com/crazyuploader/hostglance/internal/fetcher"
+	"github.com/crazyuploader/hostglance/internal/history"
+	"github.com/crazyuploader/hostglance/internal/model"
+	"github.com/crazyuploader/hostglance/templates"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/limiter"
 	"github.com/gofiber/fiber/v3/middleware/logger"
@@ -166,7 +166,7 @@ func Start(cfg *config.Config) error {
 	// Shutdown on SIGTERM/SIGINT
 	go shutdownOnSignal(shutdownSigs, ctx, cancel, app)
 
-	slog.Info("System Stats started", "url", fmt.Sprintf("http://localhost%s", cfg.Addr))
+	slog.Info("HostGlance started", "url", fmt.Sprintf("http://localhost%s", cfg.Addr))
 	return app.Listen(cfg.Addr)
 }
 
@@ -210,7 +210,7 @@ func setupHistory(ctx context.Context, cfg *config.Config, f *fetcher.Fetcher) *
 
 func newFiberApp(cfg *config.Config) *fiber.App {
 	app := fiber.New(fiber.Config{
-		AppName:      "System Stats",
+		AppName:      "HostGlance",
 		ReadTimeout:  httpReadTimeout,
 		WriteTimeout: 0, // Disable write timeout for SSE streams
 		IdleTimeout:  httpIdleTimeout,

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/crazyuploader/zfs-dash/internal/parser"
+	"github.com/crazyuploader/hostglance/internal/parser"
 )
 
 // nodeExporterFixture mirrors the label shapes of a real node_exporter 1.11

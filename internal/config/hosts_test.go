@@ -120,7 +120,7 @@ func TestLoadLegacyEndpoints(t *testing.T) {
 func TestLoadHostsFlagsAndEnvironment(t *testing.T) {
 	v := viper.New()
 	v.SetConfigType("yaml")
-	v.SetEnvPrefix("ZFSDASH")
+	v.SetEnvPrefix("HOSTGLANCE")
 	v.AutomaticEnv()
 	if err := v.ReadConfig(strings.NewReader("hosts: [from-config]")); err != nil {
 		t.Fatal(err)
@@ -130,7 +130,7 @@ func TestLoadHostsFlagsAndEnvironment(t *testing.T) {
 	if err := v.BindPFlag("hosts", flags.Lookup("hosts")); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("ZFSDASH_HOSTS", "env-one,env-two")
+	t.Setenv("HOSTGLANCE_HOSTS", "env-one,env-two")
 	cfg, err := load(v)
 	if err != nil || len(cfg.Hosts) != 2 || cfg.Hosts[0].Label != "env-one" {
 		t.Fatalf("environment did not override config: cfg=%+v err=%v", cfg, err)

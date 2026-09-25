@@ -15,7 +15,7 @@ var cfgFile string
 var initConfigErr error
 
 var rootCmd = &cobra.Command{
-	Use:           "zfs-dash",
+	Use:           "hostglance",
 	Short:         "System and storage monitoring with host discovery",
 	Long:          `Discover node, ZFS, and SMART exporters on configured hosts and serve a live system and storage dashboard.`,
 	SilenceUsage:  true,
@@ -68,9 +68,9 @@ func initConfig() {
 		viper.SetConfigName("config")
 		viper.SetConfigType("yaml")
 		viper.AddConfigPath(".")
-		viper.AddConfigPath("$HOME/.config/zfs-dash")
+		viper.AddConfigPath("$HOME/.config/hostglance")
 	}
-	viper.SetEnvPrefix("ZFSDASH")
+	viper.SetEnvPrefix("HOSTGLANCE")
 	viper.AutomaticEnv()
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Fprintln(os.Stderr, "Using config:", viper.ConfigFileUsed())

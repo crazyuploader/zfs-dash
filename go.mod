@@ -1,4 +1,4 @@
-module github.com/crazyuploader/zfs-dash
+module github.com/crazyuploader/hostglance
 
 go 1.26.2
 

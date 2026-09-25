@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/crazyuploader/zfs-dash/internal/parser"
+	"github.com/crazyuploader/hostglance/internal/parser"
 )
 
 // PoolHealth is the human-readable pool state.
